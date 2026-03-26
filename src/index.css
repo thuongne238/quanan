@@ -1,0 +1,195 @@
+@import "tailwindcss";
+
+/* ===== M3 Color Tokens ===== */
+:root {
+  --md-primary: #1B6B4A;
+  --md-on-primary: #FFFFFF;
+  --md-primary-container: #A4F5C5;
+  --md-on-primary-container: #002113;
+  --md-secondary: #4E6355;
+  --md-on-secondary: #FFFFFF;
+  --md-secondary-container: #D0E8D6;
+  --md-on-secondary-container: #0B1F14;
+  --md-tertiary: #3B6471;
+  --md-on-tertiary: #FFFFFF;
+  --md-tertiary-container: #BFE9F8;
+  --md-on-tertiary-container: #001F28;
+  --md-surface: #F8FAF5;
+  --md-on-surface: #191C19;
+  --md-surface-variant: #DCE5DB;
+  --md-on-surface-variant: #404942;
+  --md-outline: #717971;
+  --md-outline-variant: #C0C9BF;
+  --md-error: #BA1A1A;
+  --md-on-error: #FFFFFF;
+  --md-surface-container: #EDEEE9;
+  --md-surface-container-low: #F2F4EF;
+  --md-surface-container-high: #E7E9E3;
+  --md-surface-container-highest: #E1E3DE;
+  --md-inverse-surface: #2E312E;
+  --md-inverse-on-surface: #EFF1EC;
+  --md-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08);
+  --md-shadow-lg: 0 4px 6px rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.06);
+  --md-shadow-xl: 0 10px 25px rgba(0,0,0,0.12), 0 4px 10px rgba(0,0,0,0.08);
+  --md-radius-sm: 8px;
+  --md-radius-md: 12px;
+  --md-radius-lg: 16px;
+  --md-radius-xl: 28px;
+  --md-radius-full: 9999px;
+}
+
+.dark {
+  --md-primary: #88D9A6;
+  --md-on-primary: #003822;
+  --md-primary-container: #005234;
+  --md-on-primary-container: #A4F5C5;
+  --md-secondary: #B5CCBA;
+  --md-on-secondary: #203528;
+  --md-secondary-container: #374B3E;
+  --md-on-secondary-container: #D0E8D6;
+  --md-tertiary: #A3CDDC;
+  --md-on-tertiary: #023641;
+  --md-tertiary-container: #214C59;
+  --md-on-tertiary-container: #BFE9F8;
+  --md-surface: #111411;
+  --md-on-surface: #E1E3DE;
+  --md-surface-variant: #404942;
+  --md-on-surface-variant: #C0C9BF;
+  --md-outline: #8A938A;
+  --md-outline-variant: #404942;
+  --md-error: #FFB4AB;
+  --md-on-error: #690005;
+  --md-surface-container: #1D201D;
+  --md-surface-container-low: #191C19;
+  --md-surface-container-high: #272A27;
+  --md-surface-container-highest: #323532;
+  --md-inverse-surface: #E1E3DE;
+  --md-inverse-on-surface: #191C19;
+  --md-shadow: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+  --md-shadow-lg: 0 4px 6px rgba(0,0,0,0.25), 0 2px 4px rgba(0,0,0,0.15);
+  --md-shadow-xl: 0 10px 25px rgba(0,0,0,0.3), 0 4px 10px rgba(0,0,0,0.2);
+}
+
+/* ===== Base Reset ===== */
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Inter', 'Roboto', system-ui, -apple-system, sans-serif;
+  background-color: var(--md-surface);
+  color: var(--md-on-surface);
+  transition: background-color 0.3s ease, color 0.3s ease;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior: none;
+}
+
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--md-outline-variant); border-radius: 4px; }
+
+/* ===== M3 Elevation Classes ===== */
+.elevation-0 { box-shadow: none; }
+.elevation-1 { box-shadow: var(--md-shadow); }
+.elevation-2 { box-shadow: var(--md-shadow-lg); }
+.elevation-3 { box-shadow: var(--md-shadow-xl); }
+
+/* ===== Glassmorphism ===== */
+.glass {
+  background: rgba(255,255,255,0.6);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255,255,255,0.3);
+}
+.dark .glass {
+  background: rgba(30,35,30,0.7);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+/* ===== M3 Ripple Effect ===== */
+.ripple {
+  position: relative;
+  overflow: hidden;
+}
+.ripple::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--ripple-x, 50%) var(--ripple-y, 50%), rgba(0,0,0,0.08) 0%, transparent 60%);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.ripple:active::after { opacity: 1; }
+
+/* ===== Floating Cart Badge ===== */
+.cart-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--md-error);
+  color: var(--md-on-error);
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+}
+
+/* ===== Animation Keyframes ===== */
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes slideDown {
+  from { transform: translateY(-20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes scaleIn {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-slide-up { animation: slideUp 0.35s cubic-bezier(0.2, 0, 0, 1) forwards; }
+.animate-slide-down { animation: slideDown 0.3s ease-out forwards; }
+.animate-fade-in { animation: fadeIn 0.25s ease-out forwards; }
+.animate-scale-in { animation: scaleIn 0.25s cubic-bezier(0.2, 0, 0, 1) forwards; }
+.animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+
+/* ===== Thermal Bill Print ===== */
+@media print {
+  body * { visibility: hidden; }
+  .thermal-bill, .thermal-bill * { visibility: visible; }
+  .thermal-bill {
+    position: absolute;
+    left: 0; top: 0;
+    width: 58mm;
+    font-size: 11px;
+  }
+  .thermal-bill.w-80mm { width: 80mm; font-size: 12px; }
+}
+
+/* ===== Safe area ===== */
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.safe-top { padding-top: env(safe-area-inset-top, 0px); }
