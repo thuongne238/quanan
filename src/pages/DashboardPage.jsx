@@ -98,7 +98,7 @@ const DashboardPage = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-[var(--md-on-surface)]">Dashboard</h1>
+          <h1 className="text-xl font-bold text-[var(--md-on-surface)]">Bảng Điều Khiển Công Thương Pos</h1>
           <p className="text-xs text-[var(--md-on-surface-variant)] mt-0.5 flex items-center gap-1">
             <Calendar size={12} /> {todayStr}
           </p>
@@ -146,7 +146,7 @@ const DashboardPage = () => {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--md-outline-variant)" opacity={0.5} />
                 <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--md-on-surface-variant)' }} />
-                <YAxis tick={{ fontSize: 10, fill: 'var(--md-on-surface-variant)' }} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
+                <YAxis tick={{ fontSize: 10, fill: 'var(--md-on-surface-variant)' }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
                 <Tooltip
                   contentStyle={{
                     background: 'var(--md-surface-container)',

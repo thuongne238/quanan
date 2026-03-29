@@ -1,23 +1,15 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Receipt, Search, ChevronRight, Printer, CheckCircle, XCircle, Clock, Plus, Minus, Trash2, ShoppingBag } from 'lucide-react';
+import { Receipt, Search, ChevronRight, Printer, Plus, Minus, Trash2, ShoppingBag } from 'lucide-react';
 import Card from '../components/ui/Card';
-import Chip from '../components/ui/Chip';
 import Modal from '../components/ui/Modal';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { formatCurrency, printBill } from '../utils/printer';
 import { fetchOrders, fetchProducts, fetchCategories, createOrder, remove } from '../firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 
-const statusConfig = {
-  completed: { label: 'Hoàn thành', icon: CheckCircle, color: 'var(--md-primary)' },
-  cancelled: { label: 'Đã hủy', icon: XCircle, color: 'var(--md-error)' },
-  pending: { label: 'Đang xử lý', icon: Clock, color: 'var(--md-tertiary)' },
-};
-
 const BillPage = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [selectedOrder, setSelectedOrder] = useState(null);
   const { user, isAdmin } = useAuth();
@@ -47,7 +39,6 @@ const BillPage = () => {
 
   const filtered = useMemo(() => {
     let result = orders;
-    if (statusFilter !== 'all') result = result.filter(o => o.status === statusFilter);
     if (search.trim()) {
       const q = search.toLowerCase();
       result = result.filter(o =>
@@ -57,7 +48,7 @@ const BillPage = () => {
       );
     }
     return result;
-  }, [orders, statusFilter, search]);
+  }, [orders, search]);
 
   const [orderToDelete, setOrderToDelete] = useState(null);
 
@@ -165,7 +156,7 @@ const BillPage = () => {
   }
 
   return (
-    <div className="animate-fade-in">
+    <div className="relative pb-4 animate-fade-in">
       {/* Header & Search */}
       <div className="sticky top-0 z-20 bg-[var(--md-surface)] pt-4 pb-2 px-4">
         <div className="flex items-center justify-between mb-3">
@@ -183,16 +174,6 @@ const BillPage = () => {
         </div>
       </div>
 
-      {/* Status filter chips */}
-      <div className="px-4 py-2 overflow-x-auto">
-        <div className="flex gap-2" style={{ minWidth: 'max-content' }}>
-          <Chip label="Tất cả" selected={statusFilter === 'all'} onClick={() => setStatusFilter('all')} />
-          {Object.entries(statusConfig).map(([key, cfg]) => (
-            <Chip key={key} label={cfg.label} icon={cfg.icon} selected={statusFilter === key} onClick={() => setStatusFilter(key)} />
-          ))}
-        </div>
-      </div>
-
       {/* Orders list */}
       <div className="px-4 mt-2 space-y-2 pb-4">
         {filtered.length === 0 ? (
@@ -206,19 +187,12 @@ const BillPage = () => {
           </div>
         ) : (
           filtered.map(order => {
-            const status = statusConfig[order.status] || statusConfig.pending;
-            const StatusIcon = status.icon;
             return (
               <Card key={order.id} variant="elevated" onClick={() => setSelectedOrder(order)}
                 className="p-4 cursor-pointer active:scale-[0.98] transition-transform">
                 <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <StatusIcon size={16} style={{ color: status.color }} />
-                      <span className="text-xs font-medium px-2 py-0.5 rounded-full"
-                        style={{ background: `color-mix(in srgb, ${status.color} 15%, transparent)`, color: status.color }}>
-                        {status.label}
-                      </span>
                       <span className="text-xs text-[var(--md-on-surface-variant)]">{formatShortDate(order.timestamp)}</span>
                     </div>
                     <p className="text-xs text-[var(--md-on-surface-variant)] truncate">
@@ -252,12 +226,6 @@ const BillPage = () => {
               <div className="flex justify-between text-sm">
                 <span className="text-[var(--md-on-surface-variant)]">Thu ngân:</span>
                 <span className="text-[var(--md-on-surface)]">{selectedOrder.cashier_name || '--'}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-[var(--md-on-surface-variant)]">Trạng thái:</span>
-                <span className="font-medium" style={{ color: (statusConfig[selectedOrder.status] || statusConfig.pending).color }}>
-                  {(statusConfig[selectedOrder.status] || statusConfig.pending).label}
-                </span>
               </div>
             </div>
             <div className="border-t border-[var(--md-outline-variant)] pt-3">

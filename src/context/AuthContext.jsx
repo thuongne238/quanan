@@ -14,9 +14,18 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let initialLoad = true;
+    const startTime = Date.now();
+
     const unsub = onAuthChange((u) => {
       setUser(u);
-      setLoading(false);
+      
+      if (initialLoad) {
+        initialLoad = false;
+        const elapsed = Date.now() - startTime;
+        const remaining = Math.max(0, 2000 - elapsed);
+        setTimeout(() => setLoading(false), remaining);
+      }
     });
     return unsub;
   }, []);

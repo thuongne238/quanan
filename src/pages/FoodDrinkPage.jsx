@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Search, ShoppingCart, Plus, Coffee, IceCreamCone, Pizza, Sandwich, Salad, Cake, Wine, Edit, Trash2, MoreVertical, FolderPlus, X } from 'lucide-react';
+import { Search, ShoppingCart, Plus, Coffee, IceCreamCone, Pizza, Sandwich, Salad, Cake, Wine, Edit, Trash2, MoreVertical, FolderPlus, X, ChevronDown, ChevronRight } from 'lucide-react';
 import Card from '../components/ui/Card';
 import Chip from '../components/ui/Chip';
 import FAB from '../components/ui/FAB';
@@ -31,13 +31,23 @@ const FoodDrinkPage = () => {
   const [productModal, setProductModal] = useState(false);
   const [editProduct, setEditProduct] = useState(null);
   const [productForm, setProductForm] = useState({ name: '', price: '', category_id: '', status: 'active' });
+  const [productError, setProductError] = useState('');
 
   // Category modal
   const [catModal, setCatModal] = useState(false);
   const [catForm, setCatForm] = useState({ name: '', icon_name: 'coffee', sort_order: 0 });
+  const [catError, setCatError] = useState('');
 
   // Long-press / action menu
   const [actionProduct, setActionProduct] = useState(null);
+  const [collapsedCats, setCollapsedCats] = useState(() => {
+    const saved = localStorage.getItem('pos-collapsed-cats');
+    return saved ? JSON.parse(saved) : {};
+  });
+
+  useEffect(() => {
+    localStorage.setItem('pos-collapsed-cats', JSON.stringify(collapsedCats));
+  }, [collapsedCats]);
 
   useEffect(() => {
     const load = async () => {
@@ -55,7 +65,7 @@ const FoodDrinkPage = () => {
   }, []);
 
   const filtered = useMemo(() => {
-    let result = products.filter(p => p.status !== 'inactive');
+    let result = products;
     if (selectedCat !== 'all') result = result.filter(p => p.category_id === selectedCat);
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -63,6 +73,20 @@ const FoodDrinkPage = () => {
     }
     return result;
   }, [products, selectedCat, search]);
+
+  const groupedProducts = useMemo(() => {
+    const groups = {};
+    filtered.forEach(p => {
+      const catId = p.category_id || 'uncategorized';
+      if (!groups[catId]) groups[catId] = [];
+      groups[catId].push(p);
+    });
+    return groups;
+  }, [filtered]);
+
+  const toggleCat = (catId) => {
+    setCollapsedCats(prev => ({ ...prev, [catId]: !prev[catId] }));
+  };
 
   const handleCheckout = async () => {
     try {
@@ -87,6 +111,7 @@ const FoodDrinkPage = () => {
   const openAddProduct = () => {
     setEditProduct(null);
     setProductForm({ name: '', price: '', category_id: categories[0]?.id || '', status: 'active' });
+    setProductError('');
     setProductModal(true);
   };
 
@@ -94,13 +119,24 @@ const FoodDrinkPage = () => {
     setEditProduct(product);
     setProductForm({ name: product.name, price: String(product.price), category_id: product.category_id || '', status: product.status || 'active' });
     setActionProduct(null);
+    setProductError('');
     setProductModal(true);
   };
 
   const handleSaveProduct = async () => {
     try {
+      setProductError('');
+      const trimmedName = productForm.name.trim();
+      if (!trimmedName || !productForm.price) return;
+      
+      const isDuplicate = products.some(p => p.name.toLowerCase() === trimmedName.toLowerCase() && p.id !== editProduct?.id);
+      if (isDuplicate) {
+        setProductError('Tên món ăn đã tồn tại, vui lòng chọn tên khác!');
+        return;
+      }
+
       const data = {
-        name: productForm.name,
+        name: trimmedName,
         price: parseInt(productForm.price) || 0,
         category_id: productForm.category_id,
         status: productForm.status,
@@ -138,8 +174,17 @@ const FoodDrinkPage = () => {
   // === Category quick-add ===
   const handleAddCategory = async () => {
     try {
-      if (!catForm.name.trim()) return;
-      await create('categories', catForm);
+      setCatError('');
+      const trimmedName = catForm.name.trim();
+      if (!trimmedName) return;
+
+      const isDuplicate = categories.some(c => c.name.toLowerCase() === trimmedName.toLowerCase());
+      if (isDuplicate) {
+        setCatError('Tên danh mục đã tồn tại!');
+        return;
+      }
+
+      await create('categories', { ...catForm, name: trimmedName });
       const cats = await fetchCategories();
       setCategories(cats);
       setCatModal(false);
@@ -165,7 +210,7 @@ const FoodDrinkPage = () => {
           <h1 className="text-xl font-bold text-[var(--md-on-surface)]">Thực đơn</h1>
           {isAdmin && (
             <div className="flex gap-2">
-              <button onClick={() => { setCatForm({ name: '', icon_name: 'coffee', sort_order: categories.length }); setCatModal(true); }}
+              <button onClick={() => { setCatForm({ name: '', icon_name: 'coffee', sort_order: categories.length }); setCatError(''); setCatModal(true); }}
                 className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-[var(--md-secondary-container)] text-[var(--md-on-secondary-container)] text-xs font-medium transition-all active:scale-95">
                 <FolderPlus size={14} /> Danh mục
               </button>
@@ -195,8 +240,8 @@ const FoodDrinkPage = () => {
         </div>
       </div>
 
-      {/* Products grid */}
-      <div className="px-4 mt-2">
+      {/* Products grouped by category */}
+      <div className="px-4 mt-2 space-y-4">
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-[var(--md-on-surface-variant)]">
             <Coffee size={48} strokeWidth={1.5} className="mb-3 opacity-40" />
@@ -209,48 +254,85 @@ const FoodDrinkPage = () => {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3">
-            {filtered.map(product => (
-              <Card key={product.id} variant="elevated" className="overflow-hidden group relative">
-                {/* Action menu for admin */}
-                {isAdmin && (
-                  <button onClick={(e) => { e.stopPropagation(); setActionProduct(actionProduct?.id === product.id ? null : product); }}
-                    className="absolute top-2 right-2 z-10 p-1 rounded-full bg-black/20 hover:bg-black/30 transition-colors">
-                    <MoreVertical size={16} className="text-white" />
-                  </button>
-                )}
+          [...categories, { id: 'uncategorized', name: 'Khác', icon_name: 'coffee' }].map(cat => {
+            const catProducts = groupedProducts[cat.id];
+            if (!catProducts || catProducts.length === 0) return null;
+            const isCollapsed = collapsedCats[cat.id];
+            
+            return (
+              <div key={cat.id} className="space-y-3">
+                {/* Category Header */}
+                <button onClick={() => toggleCat(cat.id)} className="w-full flex items-center justify-between py-1 text-[var(--md-on-surface)] active:opacity-70 transition-opacity">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-base tracking-wide">{cat.name}</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--md-surface-container-highest)] text-[var(--md-on-surface-variant)]">
+                      {catProducts.length} món
+                    </span>
+                  </div>
+                  {isCollapsed ? <ChevronRight size={20} className="text-[var(--md-on-surface-variant)]" /> : <ChevronDown size={20} className="text-[var(--md-on-surface-variant)]" />}
+                </button>
+                
+                {/* Products Grid */}
+                {!isCollapsed && (
+                  <div className="grid grid-cols-2 gap-3">
+                    {catProducts.map(product => (
+                      <Card key={product.id} variant="elevated" className={`overflow-hidden group relative ${product.status === 'inactive' ? 'opacity-70 grayscale-[30%]' : ''}`}>
+                        {/* Status Badge */}
+                        <div className="absolute top-2 left-2 z-10 pointer-events-none">
+                          {product.status === 'inactive' ? (
+                            <span className="px-2 py-0.5 rounded-full bg-[var(--md-error)] text-[var(--md-on-error)] text-[10px] font-bold shadow-sm inline-flex">Ngừng bán</span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full bg-[var(--md-primary)] text-[var(--md-on-primary)] text-[10px] font-bold shadow-sm inline-flex">Đang bán</span>
+                          )}
+                        </div>
 
-                {/* Action dropdown */}
-                {actionProduct?.id === product.id && (
-                  <div className="absolute top-9 right-2 z-20 bg-[var(--md-surface-container)] rounded-[var(--md-radius-md)] elevation-2 overflow-hidden animate-scale-in">
-                    <button onClick={() => openEditProduct(product)}
-                      className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-[var(--md-on-surface)] hover:bg-[var(--md-surface-container-highest)] transition-colors">
-                      <Edit size={14} /> Sửa
-                    </button>
-                    <button onClick={() => requestDeleteProduct(product)}
-                      className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-[var(--md-error)] hover:bg-[var(--md-error)]/10 transition-colors">
-                      <Trash2 size={14} /> Xóa
-                    </button>
+                        {/* Action menu for admin */}
+                        {isAdmin && (
+                          <button onClick={(e) => { e.stopPropagation(); setActionProduct(actionProduct?.id === product.id ? null : product); }}
+                            className="absolute top-2 right-2 z-10 p-1.5 rounded-full bg-black/30 hover:bg-black/40 transition-colors">
+                            <MoreVertical size={16} className="text-white" />
+                          </button>
+                        )}
+
+                        {/* Action dropdown */}
+                        {actionProduct?.id === product.id && (
+                          <div className="absolute top-9 right-2 z-20 bg-[var(--md-surface-container)] rounded-[var(--md-radius-md)] elevation-2 overflow-hidden animate-scale-in">
+                            <button onClick={() => openEditProduct(product)}
+                              className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-[var(--md-on-surface)] hover:bg-[var(--md-surface-container-highest)] transition-colors">
+                              <Edit size={14} /> Sửa
+                            </button>
+                            <button onClick={() => requestDeleteProduct(product)}
+                              className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-[var(--md-error)] hover:bg-[var(--md-error)]/10 transition-colors">
+                              <Trash2 size={14} /> Xóa
+                            </button>
+                          </div>
+                        )}
+
+                        <div className="h-24 bg-gradient-to-br from-[var(--md-primary-container)] to-[var(--md-tertiary-container)] flex items-center justify-center">
+                          {(() => {
+                            const pcat = categories.find(c => c.id === product.category_id); const IconComp = pcat ? iconMap[pcat.icon_name] || Coffee : Coffee;
+                            return <IconComp size={32} className="text-[var(--md-on-primary-container)] opacity-60" />;
+                          })()}
+                        </div>
+                        <div className="p-3">
+                          <h3 className="text-sm font-semibold text-[var(--md-on-surface)] truncate">{product.name}</h3>
+                          <p className="text-xs text-[var(--md-primary)] font-bold mt-1">{formatCurrency(product.price)}</p>
+                          <button onClick={() => addItem(product)} disabled={product.status === 'inactive'}
+                            className={`mt-2 w-full h-9 rounded-[var(--md-radius-xl)] text-xs font-semibold transition-all duration-200 flex items-center justify-center gap-1 ${
+                              product.status === 'inactive'
+                                ? 'bg-[var(--md-surface-container-highest)] text-[var(--md-on-surface-variant)] cursor-not-allowed'
+                                : 'bg-[var(--md-primary)] text-[var(--md-on-primary)] active:scale-95'
+                            }`}>
+                            <Plus size={14} /> Thêm
+                          </button>
+                        </div>
+                      </Card>
+                    ))}
                   </div>
                 )}
-
-                <div className="h-24 bg-gradient-to-br from-[var(--md-primary-container)] to-[var(--md-tertiary-container)] flex items-center justify-center">
-                  {(() => {
-                    const cat = categories.find(c => c.id === product.category_id); const IconComp = cat ? iconMap[cat.icon_name] || Coffee : Coffee;
-                    return <IconComp size={32} className="text-[var(--md-on-primary-container)] opacity-60" />;
-                  })()}
-                </div>
-                <div className="p-3">
-                  <h3 className="text-sm font-semibold text-[var(--md-on-surface)] truncate">{product.name}</h3>
-                  <p className="text-xs text-[var(--md-primary)] font-bold mt-1">{formatCurrency(product.price)}</p>
-                  <button onClick={() => addItem(product)}
-                    className="mt-2 w-full h-9 rounded-[var(--md-radius-xl)] bg-[var(--md-primary)] text-[var(--md-on-primary)] text-xs font-semibold transition-all duration-200 active:scale-95 flex items-center justify-center gap-1">
-                    <Plus size={14} /> Thêm
-                  </button>
-                </div>
-              </Card>
-            ))}
-          </div>
+              </div>
+            );
+          })
         )}
       </div>
 
@@ -275,8 +357,13 @@ const FoodDrinkPage = () => {
       )}
 
       {/* ===== Product Modal ===== */}
-      <Modal open={productModal} onClose={() => { setProductModal(false); setEditProduct(null); }} title={editProduct ? 'Sửa món' : 'Thêm món mới'}>
+      <Modal open={productModal} onClose={() => { setProductModal(false); setEditProduct(null); setProductError(''); }} title={editProduct ? 'Sửa món' : 'Thêm món mới'}>
         <div className="space-y-4">
+          {productError && (
+            <div className="px-4 py-3 rounded-[var(--md-radius-md)] bg-[var(--md-error)]/10 text-[var(--md-error)] text-sm animate-slide-down">
+              {productError}
+            </div>
+          )}
           <div>
             <label className="block text-xs font-medium text-[var(--md-on-surface-variant)] mb-1 ml-1">Tên món *</label>
             <input type="text" value={productForm.name} onChange={e => setProductForm({ ...productForm, name: e.target.value })}
@@ -319,8 +406,13 @@ const FoodDrinkPage = () => {
       </Modal>
 
       {/* ===== Category Quick-Add Modal ===== */}
-      <Modal open={catModal} onClose={() => setCatModal(false)} title="Thêm danh mục">
+      <Modal open={catModal} onClose={() => { setCatModal(false); setCatError(''); }} title="Thêm danh mục">
         <div className="space-y-4">
+          {catError && (
+            <div className="px-4 py-3 rounded-[var(--md-radius-md)] bg-[var(--md-error)]/10 text-[var(--md-error)] text-sm animate-slide-down">
+              {catError}
+            </div>
+          )}
           <div>
             <label className="block text-xs font-medium text-[var(--md-on-surface-variant)] mb-1 ml-1">Tên danh mục *</label>
             <input type="text" value={catForm.name} onChange={e => setCatForm({ ...catForm, name: e.target.value })}

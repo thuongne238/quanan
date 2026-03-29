@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Settings, Users, FolderTree, Wifi, WifiOff, Bluetooth, BluetoothSearching,
-  Moon, Sun, Store, Phone, MapPin, ChevronRight, Plus, Trash2, Edit,
-  LogOut, Shield, Signal, UserPlus, Eye, EyeOff, Save
+  Moon, Sun, Store, Phone, MapPin, ChevronRight, ChevronDown, Plus, Trash2, Edit,
+  LogOut, Shield, Signal, UserPlus, Eye, EyeOff, Save, History
 } from 'lucide-react';
 import Card from '../components/ui/Card';
 import Toggle from '../components/ui/Toggle';
@@ -10,9 +10,10 @@ import Modal from '../components/ui/Modal';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { formatCurrency } from '../utils/printer';
 import { getNetworkStatus, addNetworkListener } from '../utils/network';
 import { scanDevices, isBluetoothAvailable } from '../utils/bluetooth';
-import { fetchCategories, fetchUsers, create, update, remove } from '../firebase/firestore';
+import { fetchCategories, fetchUsers, fetchOrders, create, update, remove } from '../firebase/firestore';
 import { createUserAccount } from '../firebase/auth';
 
 const SettingPage = () => {
@@ -30,6 +31,7 @@ const SettingPage = () => {
   const [catModal, setCatModal] = useState(false);
   const [editCat, setEditCat] = useState(null);
   const [catForm, setCatForm] = useState({ name: '', icon_name: 'coffee', sort_order: 0 });
+  const [catError, setCatError] = useState('');
   // Users
   const [users, setUsers] = useState([]);
   const [userModal, setUserModal] = useState(false);
@@ -41,8 +43,13 @@ const SettingPage = () => {
   // Store info
   const [storeInfo, setStoreInfo] = useState(() => {
     const saved = localStorage.getItem('pos-store-info');
-    return saved ? JSON.parse(saved) : { storeName: 'POS Takeaway', address: '', phone: '' };
+    return saved ? JSON.parse(saved) : { storeName: 'Pos công thương', address: '', phone: '' };
   });
+
+  // History / Orders
+  const [historyOrders, setHistoryOrders] = useState([]);
+  const [collapsedDays, setCollapsedDays] = useState({});
+  const [historyModal, setHistoryModal] = useState(false);
 
   useEffect(() => {
     getNetworkStatus().then(setNetStatus);
@@ -53,9 +60,25 @@ const SettingPage = () => {
     if (isAdmin) {
       fetchCategories().then(setCategories).catch(console.error);
       fetchUsers().then(setUsers).catch(console.error);
+      fetchOrders().then(setHistoryOrders).catch(console.error);
     }
     return () => cleanup?.();
   }, [isAdmin]);
+
+  const groupedOrders = useMemo(() => {
+    const groups = {};
+    historyOrders.forEach(o => {
+      const d = (o.timestamp?.toDate ? o.timestamp.toDate() : new Date(o.timestamp)).toLocaleDateString('vi-VN');
+      if (!groups[d]) groups[d] = [];
+      groups[d].push(o);
+    });
+    return Object.entries(groups).sort((a, b) => {
+      const parseDate = (ds) => ds.split('/').reverse().join('-');
+      return parseDate(b[0]).localeCompare(parseDate(a[0]));
+    });
+  }, [historyOrders]);
+
+  const toggleDay = (day) => setCollapsedDays(prev => ({ ...prev, [day]: !prev[day] }));
 
   // Bluetooth scan
   const handleScan = async () => {
@@ -76,6 +99,16 @@ const SettingPage = () => {
 
   const handleSaveCat = async () => {
     try {
+      setCatError('');
+      const trimmedName = catForm.name.trim();
+      if (!trimmedName) return;
+
+      const isDuplicate = categories.some(c => c.name.toLowerCase() === trimmedName.toLowerCase() && c.id !== editCat?.id);
+      if (isDuplicate) {
+        setCatError('Tên danh mục đã tồn tại!');
+        return;
+      }
+
       if (editCat) {
         await update('categories', editCat.id, catForm);
       } else {
@@ -313,7 +346,7 @@ const SettingPage = () => {
           <Card variant="elevated" className="p-4">
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm text-[var(--md-on-surface-variant)]">{categories.length} danh mục</p>
-              <button onClick={() => { setEditCat(null); setCatForm({ name: '', icon_name: 'coffee', sort_order: categories.length }); setCatModal(true); }}
+              <button onClick={() => { setEditCat(null); setCatForm({ name: '', icon_name: 'coffee', sort_order: categories.length }); setCatError(''); setCatModal(true); }}
                 className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)] text-xs font-medium transition-all active:scale-95">
                 <Plus size={14} /> Thêm
               </button>
@@ -323,7 +356,7 @@ const SettingPage = () => {
                 <div key={cat.id} className="flex items-center justify-between p-2.5 rounded-[var(--md-radius-sm)] bg-[var(--md-surface-container-highest)]">
                   <span className="text-sm text-[var(--md-on-surface)]">{cat.name}</span>
                   <div className="flex items-center gap-1">
-                    <button onClick={() => { setEditCat(cat); setCatForm({ name: cat.name, icon_name: cat.icon_name || 'coffee', sort_order: cat.sort_order || 0 }); setCatModal(true); }}
+                    <button onClick={() => { setEditCat(cat); setCatForm({ name: cat.name, icon_name: cat.icon_name || 'coffee', sort_order: cat.sort_order || 0 }); setCatError(''); setCatModal(true); }}
                       className="p-1.5 rounded-full hover:bg-[var(--md-surface-container)] transition-colors">
                       <Edit size={14} className="text-[var(--md-on-surface-variant)]" />
                     </button>
@@ -385,6 +418,15 @@ const SettingPage = () => {
               )}
             </div>
           </Card>
+
+          {/* History */}
+          <SectionTitle icon={History} title="Lịch sử hóa đơn" />
+          <Card variant="elevated" className="overflow-hidden">
+            <button onClick={() => setHistoryModal(true)} className="w-full flex items-center justify-between p-4 bg-[var(--md-surface-container)] hover:bg-[var(--md-surface-container-high)] transition-colors active:opacity-70">
+              <span className="font-medium text-sm text-[var(--md-on-surface)]">Xem danh sách biên lai</span>
+              <ChevronRight size={18} className="text-[var(--md-on-surface-variant)]" />
+            </button>
+          </Card>
         </>
       )}
 
@@ -397,8 +439,13 @@ const SettingPage = () => {
       </div>
 
       {/* ===== Category Modal ===== */}
-      <Modal open={catModal} onClose={() => { setCatModal(false); setEditCat(null); }} title={editCat ? 'Sửa danh mục' : 'Thêm danh mục'}>
+      <Modal open={catModal} onClose={() => { setCatModal(false); setEditCat(null); setCatError(''); }} title={editCat ? 'Sửa danh mục' : 'Thêm danh mục'}>
         <div className="space-y-4">
+          {catError && (
+            <div className="px-4 py-3 rounded-[var(--md-radius-md)] bg-[var(--md-error)]/10 text-[var(--md-error)] text-sm animate-slide-down">
+              {catError}
+            </div>
+          )}
           <div>
             <label className="block text-xs font-medium text-[var(--md-on-surface-variant)] mb-1 ml-1">Tên danh mục</label>
             <input type="text" value={catForm.name} onChange={e => setCatForm({ ...catForm, name: e.target.value })}
@@ -516,6 +563,44 @@ const SettingPage = () => {
         onClose={() => setUserToDelete(null)}
         type="danger"
       />
+
+      {/* ===== History Modal ===== */}
+      <Modal open={historyModal} onClose={() => setHistoryModal(false)} title="Lịch sử hóa đơn" size="sheet">
+        <div className="space-y-3 pb-8">
+          {groupedOrders.length === 0 ? (
+            <p className="text-sm text-center text-[var(--md-on-surface-variant)] py-4">Chưa có hóa đơn nào</p>
+          ) : (
+            groupedOrders.map(([day, orders]) => {
+              const isCollapsed = collapsedDays[day];
+              const dayTotal = orders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
+              return (
+                <Card key={day} variant="elevated" className="overflow-hidden">
+                  <button onClick={() => toggleDay(day)} className="w-full flex items-center justify-between p-4 bg-[var(--md-surface-container)] hover:bg-[var(--md-surface-container-high)] transition-colors">
+                    <div className="flex flex-col items-start gap-1">
+                      <span className="font-bold text-sm text-[var(--md-on-surface)]">{day}</span>
+                      <span className="text-xs text-[var(--md-on-surface-variant)]">{orders.length} đơn • <span className="text-[var(--md-primary)] font-bold">{formatCurrency(dayTotal)}</span></span>
+                    </div>
+                    {isCollapsed ? <ChevronRight size={20} className="text-[var(--md-on-surface-variant)]" /> : <ChevronDown size={20} className="text-[var(--md-on-surface-variant)]" />}
+                  </button>
+                  {!isCollapsed && (
+                    <div className="p-2 space-y-2 bg-[var(--md-surface)]">
+                      {orders.map(o => (
+                        <div key={o.id} className="flex items-center justify-between p-3 rounded-[var(--md-radius-sm)] bg-[var(--md-surface-container-lowest)] border border-[var(--md-surface-variant)]">
+                          <div className="flex flex-col flex-1 min-w-0">
+                            <span className="text-xs text-[var(--md-on-surface-variant)] mb-1">{(o.timestamp?.toDate ? o.timestamp.toDate() : new Date(o.timestamp)).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} • {o.cashier_name || 'Staff'}</span>
+                            <span className="text-sm font-medium text-[var(--md-on-surface)] truncate pr-2">{o.items?.map(i => `${i.name} x${i.qty}`).join(', ') || 'Không có món'}</span>
+                          </div>
+                          <span className="text-sm font-bold text-[var(--md-primary)] ml-2 flex-shrink-0">{formatCurrency(o.total_amount || 0)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Card>
+              );
+            })
+          )}
+        </div>
+      </Modal>
     </div>
   );
 };

@@ -63,7 +63,7 @@ const LoginPage = () => {
           <div className="w-16 h-16 rounded-[var(--md-radius-xl)] bg-[var(--md-primary-container)] flex items-center justify-center mb-4 elevation-1">
             <Coffee size={28} className="text-[var(--md-on-primary-container)]" />
           </div>
-          <h1 className="text-2xl font-bold text-[var(--md-on-surface)]">POS Takeaway</h1>
+          <h1 className="text-2xl font-bold text-[var(--md-on-surface)]">Pos công thương</h1>
           <p className="text-sm text-[var(--md-on-surface-variant)] mt-1">Đăng nhập để tiếp tục</p>
         </div>
 

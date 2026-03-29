@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import LoadingScreen from './components/ui/LoadingScreen';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { CartProvider } from './context/CartContext';
@@ -10,18 +11,21 @@ import FoodDrinkPage from './pages/FoodDrinkPage';
 import BillPage from './pages/BillPage';
 import SettingPage from './pages/SettingPage';
 
+const AuthLayout = () => {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
+  return (
+    <AppShell>
+      <Outlet />
+    </AppShell>
+  );
+};
+
 const AppRoutes = () => {
   const { user, loading, isAdmin } = useAuth();
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--md-surface)]">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-12 h-12 border-3 border-[var(--md-primary)] border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm text-[var(--md-on-surface-variant)]">Đang tải...</span>
-        </div>
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   return (
@@ -30,38 +34,42 @@ const AppRoutes = () => {
         path="/login"
         element={user ? <Navigate to={isAdmin ? '/dashboard' : '/menu'} replace /> : <LoginPage />}
       />
-      <Route
-        path="/dashboard"
-        element={
-          <ProtectedRoute adminOnly>
-            <AppShell><DashboardPage /></AppShell>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/menu"
-        element={
-          <ProtectedRoute>
-            <AppShell><FoodDrinkPage /></AppShell>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/bills"
-        element={
-          <ProtectedRoute>
-            <AppShell><BillPage /></AppShell>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/settings"
-        element={
-          <ProtectedRoute adminOnly>
-            <AppShell><SettingPage /></AppShell>
-          </ProtectedRoute>
-        }
-      />
+
+      <Route element={<AuthLayout />}>
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute adminOnly>
+              <DashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/menu"
+          element={
+            <ProtectedRoute>
+              <FoodDrinkPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/bills"
+          element={
+            <ProtectedRoute>
+              <BillPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute adminOnly>
+              <SettingPage />
+            </ProtectedRoute>
+          }
+        />
+      </Route>
+      
       <Route path="*" element={<Navigate to={user ? (isAdmin ? '/dashboard' : '/menu') : '/login'} replace />} />
     </Routes>
   );

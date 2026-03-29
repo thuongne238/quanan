@@ -1,7 +1,7 @@
 import { formatCurrency } from '../../utils/printer';
 
 const ThermalBill = ({ order, storeInfo = {}, width = '58mm' }) => {
-  const { storeName = 'POS Takeaway', address = '', phone = '' } = storeInfo;
+  const { storeName = 'Pos công thương', address = '', phone = '' } = storeInfo;
 
   const date = order?.timestamp?.toDate
     ? order.timestamp.toDate().toLocaleString('vi-VN')

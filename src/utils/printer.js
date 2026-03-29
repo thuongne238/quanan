@@ -10,7 +10,7 @@ export const formatCurrency = (amount) => {
 
 export const generateBillHTML = (order, storeInfo = {}) => {
   const {
-    storeName = 'POS Takeaway',
+    storeName = 'Pos công thương',
     address = '',
     phone = '',
   } = storeInfo;
