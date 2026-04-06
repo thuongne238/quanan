@@ -6,7 +6,7 @@ const tabs = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, adminOnly: true },
   { path: '/menu', label: 'Thực đơn', icon: UtensilsCrossed },
   { path: '/bills', label: 'Hóa đơn', icon: Receipt },
-  { path: '/settings', label: 'Cài đặt', icon: Settings, adminOnly: true },
+  { path: '/settings', label: 'Cài đặt', icon: Settings },
 ];
 
 const BottomNav = () => {

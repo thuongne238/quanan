@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import {
   Settings, Users, FolderTree, Wifi, WifiOff, Bluetooth, BluetoothSearching,
   Moon, Sun, Store, Phone, MapPin, ChevronRight, ChevronDown, Plus, Trash2, Edit,
-  LogOut, Shield, Signal, UserPlus, Eye, EyeOff, Save, History
+  LogOut, Shield, Signal, UserPlus, Eye, EyeOff, Save, History, Printer
 } from 'lucide-react';
 import Card from '../components/ui/Card';
 import Toggle from '../components/ui/Toggle';
@@ -10,7 +10,7 @@ import Modal from '../components/ui/Modal';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { formatCurrency } from '../utils/printer';
+import { formatCurrency, printBill, getPrinterInfo, testPrinter } from '../utils/printer';
 import { getNetworkStatus, addNetworkListener } from '../utils/network';
 import { scanDevices, isBluetoothAvailable } from '../utils/bluetooth';
 import { fetchCategories, fetchUsers, fetchOrders, create, update, remove } from '../firebase/firestore';
@@ -46,6 +46,9 @@ const SettingPage = () => {
     return saved ? JSON.parse(saved) : { storeName: 'Pos công thương', address: '', phone: '' };
   });
 
+  // Printer status
+  const [printerStatus, setPrinterStatus] = useState('Đang kiểm tra...');
+
   // History / Orders
   const [historyOrders, setHistoryOrders] = useState([]);
   const [collapsedDays, setCollapsedDays] = useState({});
@@ -56,6 +59,13 @@ const SettingPage = () => {
     let cleanup;
     addNetworkListener(setNetStatus).then(fn => { cleanup = fn; });
     isBluetoothAvailable().then(setBleAvailable);
+
+    // Load printer status
+    getPrinterInfo().then(info => {
+      if (info.isSunmiDevice && info.connected) setPrinterStatus('✅ Sunmi V1S (Máy in tích hợp)');
+      else if (info.isNative) setPrinterStatus('📱 Capacitor Native');
+      else setPrinterStatus('🖥️ Desktop (window.print)');
+    }).catch(() => setPrinterStatus('⚠️ Không xác định'));
 
     if (isAdmin) {
       fetchCategories().then(setCategories).catch(console.error);
@@ -91,6 +101,22 @@ const SettingPage = () => {
       console.error('BLE scan error:', err);
     } finally {
       setScanning(false);
+    }
+  };
+
+  const handleTestPrint = async () => {
+    const result = await testPrinter();
+    if (result.success) {
+      setPrinterStatus('✅ ' + result.method);
+    } else {
+      setPrinterStatus('❌ Lỗi: ' + (result.error || 'Không rõ'));
+      // Fallback: print via window.print
+      printBill({
+        items: [{ name: 'Test kết nối máy in', price: 0, qty: 1 }],
+        total_amount: 0,
+        timestamp: new Date(),
+        cashier_name: user?.displayName || user?.email || 'Nhân viên'
+      }, storeInfo);
     }
   };
 
@@ -265,6 +291,25 @@ const SettingPage = () => {
 
         <div className="border-t border-[var(--md-outline-variant)]" />
 
+        {/* Printer */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Printer size={20} className="text-[var(--md-primary)]" />
+            <div>
+              <p className="text-sm font-medium text-[var(--md-on-surface)]">Máy in</p>
+              <p className="text-xs text-[var(--md-on-surface-variant)]">
+                {printerStatus}
+              </p>
+            </div>
+          </div>
+          <button onClick={handleTestPrint}
+             className="px-3 py-1.5 rounded-[var(--md-radius-xl)] bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)] text-xs font-medium transition-all active:scale-95">
+             Kiểm tra
+          </button>
+        </div>
+
+        <div className="border-t border-[var(--md-outline-variant)]" />
+
         {/* Bluetooth */}
         <div>
           <div className="flex items-center justify-between mb-3">
@@ -317,27 +362,31 @@ const SettingPage = () => {
         <Toggle checked={isDark} onChange={toggleTheme} label="Chế độ tối" description="Chuyển đổi giữa giao diện sáng và tối" />
       </Card>
 
-      {/* ===== Store Info ===== */}
-      <SectionTitle icon={Store} title="Thông tin cửa hàng" />
-      <Card variant="elevated" className="p-4 space-y-3">
-        <div>
-          <label className="block text-xs font-medium text-[var(--md-on-surface-variant)] mb-1 ml-1">Tên cửa hàng</label>
-          <input type="text" value={storeInfo.storeName} onChange={e => setStoreInfo({ ...storeInfo, storeName: e.target.value })} onBlur={saveStoreInfo}
-            className="w-full h-10 px-3 rounded-[var(--md-radius-sm)] bg-[var(--md-surface-container-highest)] text-sm text-[var(--md-on-surface)] border border-transparent focus:border-[var(--md-primary)] focus:outline-none transition-colors" />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-[var(--md-on-surface-variant)] mb-1 ml-1">Địa chỉ</label>
-          <input type="text" value={storeInfo.address} onChange={e => setStoreInfo({ ...storeInfo, address: e.target.value })} onBlur={saveStoreInfo}
-            className="w-full h-10 px-3 rounded-[var(--md-radius-sm)] bg-[var(--md-surface-container-highest)] text-sm text-[var(--md-on-surface)] border border-transparent focus:border-[var(--md-primary)] focus:outline-none transition-colors"
-            placeholder="123 Đường ABC, Quận XYZ" />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-[var(--md-on-surface-variant)] mb-1 ml-1">Số điện thoại</label>
-          <input type="tel" value={storeInfo.phone} onChange={e => setStoreInfo({ ...storeInfo, phone: e.target.value })} onBlur={saveStoreInfo}
-            className="w-full h-10 px-3 rounded-[var(--md-radius-sm)] bg-[var(--md-surface-container-highest)] text-sm text-[var(--md-on-surface)] border border-transparent focus:border-[var(--md-primary)] focus:outline-none transition-colors"
-            placeholder="0909 123 456" />
-        </div>
-      </Card>
+      {/* ===== Store Info (Admin) ===== */}
+      {isAdmin && (
+        <>
+          <SectionTitle icon={Store} title="Thông tin cửa hàng" />
+          <Card variant="elevated" className="p-4 space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-[var(--md-on-surface-variant)] mb-1 ml-1">Tên cửa hàng</label>
+              <input type="text" value={storeInfo.storeName} onChange={e => setStoreInfo({ ...storeInfo, storeName: e.target.value })} onBlur={saveStoreInfo}
+                className="w-full h-10 px-3 rounded-[var(--md-radius-sm)] bg-[var(--md-surface-container-highest)] text-sm text-[var(--md-on-surface)] border border-transparent focus:border-[var(--md-primary)] focus:outline-none transition-colors" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[var(--md-on-surface-variant)] mb-1 ml-1">Địa chỉ</label>
+              <input type="text" value={storeInfo.address} onChange={e => setStoreInfo({ ...storeInfo, address: e.target.value })} onBlur={saveStoreInfo}
+                className="w-full h-10 px-3 rounded-[var(--md-radius-sm)] bg-[var(--md-surface-container-highest)] text-sm text-[var(--md-on-surface)] border border-transparent focus:border-[var(--md-primary)] focus:outline-none transition-colors"
+                placeholder="123 Đường ABC, Quận XYZ" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[var(--md-on-surface-variant)] mb-1 ml-1">Số điện thoại</label>
+              <input type="tel" value={storeInfo.phone} onChange={e => setStoreInfo({ ...storeInfo, phone: e.target.value })} onBlur={saveStoreInfo}
+                className="w-full h-10 px-3 rounded-[var(--md-radius-sm)] bg-[var(--md-surface-container-highest)] text-sm text-[var(--md-on-surface)] border border-transparent focus:border-[var(--md-primary)] focus:outline-none transition-colors"
+                placeholder="0909 123 456" />
+            </div>
+          </Card>
+        </>
+      )}
 
       {/* ===== Category Management (Admin) ===== */}
       {isAdmin && (

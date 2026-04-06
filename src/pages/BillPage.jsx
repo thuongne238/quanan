@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Receipt, Search, ChevronRight, Printer, Plus, Minus, Trash2, ShoppingBag } from 'lucide-react';
+import { Receipt, Search, ChevronRight, ChevronDown, Printer, Plus, Minus, Trash2, ShoppingBag } from 'lucide-react';
 import Card from '../components/ui/Card';
 import Modal from '../components/ui/Modal';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
@@ -12,6 +12,19 @@ const BillPage = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [expandedDates, setExpandedDates] = useState(() => {
+    try {
+      const saved = localStorage.getItem('pos-bill-expanded-dates');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('pos-bill-expanded-dates', JSON.stringify(expandedDates));
+  }, [expandedDates]);
+
   const { user, isAdmin } = useAuth();
 
   // New order creation
@@ -22,6 +35,8 @@ const BillPage = () => {
   const [productSearch, setProductSearch] = useState('');
   const [creating, setCreating] = useState(false);
   const [successToast, setSuccessToast] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState('cash'); // 'cash' or 'transfer'
+  const [expandedCategories, setExpandedCategories] = useState({});
 
   useEffect(() => {
     const load = async () => {
@@ -49,6 +64,50 @@ const BillPage = () => {
     }
     return result;
   }, [orders, search]);
+
+  const groupedOrders = useMemo(() => {
+    const groups = {};
+    filtered.forEach(order => {
+      const ts = order.timestamp;
+      let dateString = '--';
+      if (ts) {
+        const d = ts.toDate ? ts.toDate() : new Date(ts);
+        dateString = d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      }
+      if (!groups[dateString]) {
+        groups[dateString] = [];
+      }
+      groups[dateString].push(order);
+    });
+
+    const sortedKeys = Object.keys(groups).sort((a, b) => {
+      if (a === '--') return 1;
+      if (b === '--') return -1;
+      const [dayA, monthA, yearA] = a.split('/');
+      const [dayB, monthB, yearB] = b.split('/');
+      const dateA = new Date(yearA, monthA - 1, dayA);
+      const dateB = new Date(yearB, monthB - 1, dayB);
+      return dateB - dateA; // Descending
+    });
+
+    return sortedKeys.map(key => ({
+      date: key,
+      orders: groups[key].sort((a, b) => {
+        // Sort orders within a day by time descending
+        const d1 = a.timestamp?.toDate ? a.timestamp.toDate() : new Date(a.timestamp || 0);
+        const d2 = b.timestamp?.toDate ? b.timestamp.toDate() : new Date(b.timestamp || 0);
+        return d2 - d1;
+      })
+    }));
+  }, [filtered]);
+
+  const toggleDateGroup = (dateStr) => {
+    setExpandedDates(prev => ({
+      ...prev,
+      [dateStr]: prev[dateStr] === false ? true : false // Default is expanded (undefined), toggle to false
+    }));
+  };
+
 
   const [orderToDelete, setOrderToDelete] = useState(null);
 
@@ -89,6 +148,7 @@ const BillPage = () => {
       setCategories(cats);
       setOrderItems([]);
       setProductSearch('');
+      setPaymentMethod('cash');
       setNewOrderModal(true);
     } catch (err) {
       console.error('Load products error:', err);
@@ -124,6 +184,37 @@ const BillPage = () => {
     return products.filter(p => p.name.toLowerCase().includes(q));
   }, [products, productSearch]);
 
+  const groupedProducts = useMemo(() => {
+    const groups = [];
+    const catMap = {};
+    categories.forEach(cat => {
+      catMap[cat.id] = cat.name;
+    });
+    const grouped = {};
+    filteredProducts.forEach(p => {
+      const catId = p.category_id || '__uncategorized';
+      if (!grouped[catId]) grouped[catId] = [];
+      grouped[catId].push(p);
+    });
+    // Sort by category order
+    categories.forEach(cat => {
+      if (grouped[cat.id]) {
+        groups.push({ id: cat.id, name: cat.name, products: grouped[cat.id] });
+      }
+    });
+    if (grouped['__uncategorized']) {
+      groups.push({ id: '__uncategorized', name: 'Khác', products: grouped['__uncategorized'] });
+    }
+    return groups;
+  }, [filteredProducts, categories]);
+
+  const toggleCategory = (catId) => {
+    setExpandedCategories(prev => ({
+      ...prev,
+      [catId]: prev[catId] === false ? true : false
+    }));
+  };
+
   const handleCreateOrder = async () => {
     if (orderItems.length === 0) return;
     setCreating(true);
@@ -133,6 +224,7 @@ const BillPage = () => {
         total_amount: orderTotal,
         cashier_id: user?.uid || 'unknown',
         cashier_name: user?.displayName || user?.email || 'Staff',
+        payment_method: paymentMethod,
       });
       // Refresh orders
       const data = await fetchOrders();
@@ -175,8 +267,8 @@ const BillPage = () => {
       </div>
 
       {/* Orders list */}
-      <div className="px-4 mt-2 space-y-2 pb-4">
-        {filtered.length === 0 ? (
+      <div className="px-4 mt-2 space-y-4 pb-4">
+        {groupedOrders.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-[var(--md-on-surface-variant)]">
             <Receipt size={48} strokeWidth={1.5} className="mb-3 opacity-40" />
             <p className="text-sm">Không có hóa đơn</p>
@@ -186,25 +278,57 @@ const BillPage = () => {
             </button>
           </div>
         ) : (
-          filtered.map(order => {
+          groupedOrders.map((group) => {
+            const isExpanded = expandedDates[group.date] !== false; // Default expanded
+            const totalForDay = group.orders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
             return (
-              <Card key={order.id} variant="elevated" onClick={() => setSelectedOrder(order)}
-                className="p-4 cursor-pointer active:scale-[0.98] transition-transform">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs text-[var(--md-on-surface-variant)]">{formatShortDate(order.timestamp)}</span>
-                    </div>
-                    <p className="text-xs text-[var(--md-on-surface-variant)] truncate">
-                      {order.items?.map(i => `${i.name} x${i.qty}`).join(', ') || 'Không có món'}
-                    </p>
+              <div key={group.date} className="space-y-2">
+                <button 
+                  onClick={() => toggleDateGroup(group.date)}
+                  className="w-full flex items-center justify-between py-2 px-1 text-sm font-medium text-[var(--md-on-surface-variant)] active:opacity-70 transition-opacity"
+                >
+                  <div className="flex items-center gap-2">
+                    {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                    <span className="font-bold text-[var(--md-on-surface)]">{group.date} <span className="font-normal text-[var(--md-on-surface-variant)]">({group.orders.length})</span></span>
                   </div>
-                  <div className="flex items-center gap-2 ml-3">
-                    <span className="text-sm font-bold text-[var(--md-primary)]">{formatCurrency(order.total_amount || 0)}</span>
-                    <ChevronRight size={16} className="text-[var(--md-on-surface-variant)]" />
+                  <span className="text-[var(--md-primary)] font-semibold">{formatCurrency(totalForDay)}</span>
+                </button>
+                
+                {isExpanded && (
+                  <div className="space-y-2">
+                    {group.orders.map(order => (
+                      <Card key={order.id} variant="elevated" onClick={() => setSelectedOrder(order)}
+                        className="p-4 cursor-pointer active:scale-[0.98] transition-transform">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs text-[var(--md-on-surface-variant)] font-medium">{formatShortDate(order.timestamp)}</span>
+                              <span className="text-xs font-medium text-[var(--md-on-tertiary-container)] px-2 py-0.5 rounded bg-[var(--md-tertiary-container)]">
+                                {order.cashier_name || 'Staff'}
+                              </span>
+                              {order.payment_method && (
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                                  order.payment_method === 'transfer' 
+                                    ? 'border-[var(--md-primary)] text-[var(--md-primary)] bg-[var(--md-primary-container)]/10' 
+                                    : 'border-[var(--md-outline-variant)] text-[var(--md-on-surface-variant)] bg-[var(--md-surface-container-highest)]'
+                                }`}>
+                                  {order.payment_method === 'transfer' ? 'Chuyển khoản' : 'Tiền mặt'}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-[var(--md-on-surface-variant)] truncate">
+                              {order.items?.map(i => `${i.name} x${i.qty}`).join(', ') || 'Không có món'}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 ml-3">
+                            <span className="text-sm font-bold text-[var(--md-on-surface)]">{formatCurrency(order.total_amount || 0)}</span>
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
                   </div>
-                </div>
-              </Card>
+                )}
+              </div>
             );
           })
         )}
@@ -226,6 +350,12 @@ const BillPage = () => {
               <div className="flex justify-between text-sm">
                 <span className="text-[var(--md-on-surface-variant)]">Thu ngân:</span>
                 <span className="text-[var(--md-on-surface)]">{selectedOrder.cashier_name || '--'}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-[var(--md-on-surface-variant)]">Phương thức:</span>
+                <span className={`font-bold ${selectedOrder.payment_method === 'transfer' ? 'text-[var(--md-primary)]' : 'text-[var(--md-on-surface)]'}`}>
+                  {selectedOrder.payment_method === 'transfer' ? 'Chuyển khoản' : 'Tiền mặt'}
+                </span>
               </div>
             </div>
             <div className="border-t border-[var(--md-outline-variant)] pt-3">
@@ -270,36 +400,67 @@ const BillPage = () => {
               className="w-full h-10 pl-9 pr-3 rounded-[var(--md-radius-sm)] bg-[var(--md-surface-container-highest)] text-sm text-[var(--md-on-surface)] border border-transparent focus:border-[var(--md-primary)] focus:outline-none transition-colors" />
           </div>
 
-          {/* Product quick-add list */}
-          <div className="max-h-40 overflow-y-auto space-y-1 rounded-[var(--md-radius-md)] bg-[var(--md-surface-container-low)] p-2">
-            {filteredProducts.length === 0 ? (
+          {/* Product quick-add list grouped by category */}
+          <div className="max-h-52 overflow-y-auto space-y-1 rounded-[var(--md-radius-md)] bg-[var(--md-surface-container-low)] p-2">
+            {groupedProducts.length === 0 ? (
               <p className="text-center text-xs text-[var(--md-on-surface-variant)] py-3">Không tìm thấy món</p>
             ) : (
-              filteredProducts.map(p => {
-                const inCart = orderItems.find(i => i.id === p.id);
+              groupedProducts.map(group => {
+                const isSearching = productSearch.trim().length > 0;
+                const isCatExpanded = isSearching || expandedCategories[group.id] !== false;
+                const catItemCount = group.products.reduce((sum, p) => {
+                  const inCart = orderItems.find(i => i.id === p.id);
+                  return sum + (inCart ? inCart.qty : 0);
+                }, 0);
                 return (
-                  <div key={p.id} className="flex items-center justify-between p-2 rounded-[var(--md-radius-sm)] hover:bg-[var(--md-surface-container-highest)] transition-colors">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-[var(--md-on-surface)] truncate">{p.name}</p>
-                      <p className="text-xs text-[var(--md-primary)] font-semibold">{formatCurrency(p.price)}</p>
-                    </div>
-                    {inCart ? (
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => updateOrderItemQty(p.id, inCart.qty - 1)}
-                          className="w-7 h-7 flex items-center justify-center rounded-full bg-[var(--md-surface-container-highest)] transition-colors">
-                          {inCart.qty === 1 ? <Trash2 size={12} /> : <Minus size={12} />}
-                        </button>
-                        <span className="w-6 text-center text-sm font-semibold text-[var(--md-on-surface)]">{inCart.qty}</span>
-                        <button onClick={() => updateOrderItemQty(p.id, inCart.qty + 1)}
-                          className="w-7 h-7 flex items-center justify-center rounded-full bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)] transition-colors">
-                          <Plus size={12} />
-                        </button>
+                  <div key={group.id}>
+                    <button
+                      onClick={() => toggleCategory(group.id)}
+                      className="w-full flex items-center justify-between py-1.5 px-1 text-xs font-bold text-[var(--md-on-surface)] active:opacity-70 transition-opacity sticky top-0 bg-[var(--md-surface-container-low)] z-10"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        {isCatExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        <span>{group.name}</span>
+                        <span className="text-[var(--md-on-surface-variant)] font-normal">({group.products.length})</span>
                       </div>
-                    ) : (
-                      <button onClick={() => addOrderItem(p)}
-                        className="px-3 py-1 rounded-full bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)] text-xs font-medium transition-all active:scale-95">
-                        <Plus size={14} />
-                      </button>
+                      {catItemCount > 0 && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[var(--md-primary)] text-[var(--md-on-primary)]">
+                          {catItemCount}
+                        </span>
+                      )}
+                    </button>
+                    {isCatExpanded && (
+                      <div className="space-y-0.5 ml-1">
+                        {group.products.map(p => {
+                          const inCart = orderItems.find(i => i.id === p.id);
+                          return (
+                            <div key={p.id} className="flex items-center justify-between p-2 rounded-[var(--md-radius-sm)] hover:bg-[var(--md-surface-container-highest)] transition-colors">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm text-[var(--md-on-surface)] truncate">{p.name}</p>
+                                <p className="text-xs text-[var(--md-primary)] font-semibold">{formatCurrency(p.price)}</p>
+                              </div>
+                              {inCart ? (
+                                <div className="flex items-center gap-1">
+                                  <button onClick={() => updateOrderItemQty(p.id, inCart.qty - 1)}
+                                    className="w-7 h-7 flex items-center justify-center rounded-full bg-[var(--md-surface-container-highest)] transition-colors">
+                                    {inCart.qty === 1 ? <Trash2 size={12} /> : <Minus size={12} />}
+                                  </button>
+                                  <span className="w-6 text-center text-sm font-semibold text-[var(--md-on-surface)]">{inCart.qty}</span>
+                                  <button onClick={() => updateOrderItemQty(p.id, inCart.qty + 1)}
+                                    className="w-7 h-7 flex items-center justify-center rounded-full bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)] transition-colors">
+                                    <Plus size={12} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <button onClick={() => addOrderItem(p)}
+                                  className="px-3 py-1 rounded-full bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)] text-xs font-medium transition-all active:scale-95">
+                                  <Plus size={14} />
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     )}
                   </div>
                 );
@@ -329,6 +490,37 @@ const BillPage = () => {
               </div>
             </div>
           )}
+
+          {/* Payment Method Selector */}
+          <div className="space-y-2">
+            <h4 className="text-sm font-medium text-[var(--md-on-surface)]">Phương thức thanh toán</h4>
+            <div className="flex gap-2">
+              <button 
+                type="button"
+                onClick={() => setPaymentMethod('cash')}
+                className={`flex-1 flex flex-col items-center justify-center p-3 rounded-[var(--md-radius-lg)] border-2 transition-all ${
+                  paymentMethod === 'cash' 
+                    ? 'border-[var(--md-primary)] bg-[var(--md-primary-container)]/10 text-[var(--md-primary)]' 
+                    : 'border-[var(--md-outline-variant)] text-[var(--md-on-surface-variant)] hover:border-[var(--md-on-surface-variant)]'
+                }`}
+              >
+                <span className="text-sm font-bold">Tiền mặt</span>
+                <span className="text-[10px] opacity-70">Thanh toán tay</span>
+              </button>
+              <button 
+                type="button"
+                onClick={() => setPaymentMethod('transfer')}
+                className={`flex-1 flex flex-col items-center justify-center p-3 rounded-[var(--md-radius-lg)] border-2 transition-all ${
+                  paymentMethod === 'transfer' 
+                    ? 'border-[var(--md-primary)] bg-[var(--md-primary-container)]/10 text-[var(--md-primary)]' 
+                    : 'border-[var(--md-outline-variant)] text-[var(--md-on-surface-variant)] hover:border-[var(--md-on-surface-variant)]'
+                }`}
+              >
+                <span className="text-sm font-bold">Chuyển khoản</span>
+                <span className="text-[10px] opacity-70">Quét mã VietQR</span>
+              </button>
+            </div>
+          </div>
 
           {/* Total & Submit */}
           {orderItems.length > 0 && (

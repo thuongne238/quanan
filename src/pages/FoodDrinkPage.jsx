@@ -276,7 +276,7 @@ const FoodDrinkPage = () => {
                 {!isCollapsed && (
                   <div className="grid grid-cols-2 gap-3">
                     {catProducts.map(product => (
-                      <Card key={product.id} variant="elevated" className={`overflow-hidden group relative ${product.status === 'inactive' ? 'opacity-70 grayscale-[30%]' : ''}`}>
+                      <Card key={product.id} variant="elevated" className="overflow-hidden group relative">
                         {/* Status Badge */}
                         <div className="absolute top-2 left-2 z-10 pointer-events-none">
                           {product.status === 'inactive' ? (
@@ -308,19 +308,24 @@ const FoodDrinkPage = () => {
                           </div>
                         )}
 
-                        <div className="h-24 bg-gradient-to-br from-[var(--md-primary-container)] to-[var(--md-tertiary-container)] flex items-center justify-center">
-                          {(() => {
-                            const pcat = categories.find(c => c.id === product.category_id); const IconComp = pcat ? iconMap[pcat.icon_name] || Coffee : Coffee;
-                            return <IconComp size={32} className="text-[var(--md-on-primary-container)] opacity-60" />;
-                          })()}
+                        <div className={product.status === 'inactive' ? 'opacity-50 grayscale' : ''}>
+                          <div className="h-24 bg-gradient-to-br from-[var(--md-primary-container)] to-[var(--md-tertiary-container)] flex items-center justify-center">
+                            {(() => {
+                              const pcat = categories.find(c => c.id === product.category_id); const IconComp = pcat ? iconMap[pcat.icon_name] || Coffee : Coffee;
+                              return <IconComp size={32} className="text-[var(--md-on-primary-container)] opacity-60" />;
+                            })()}
+                          </div>
+                          <div className="p-3 pb-0">
+                            <h3 className="text-sm font-semibold text-[var(--md-on-surface)] truncate">{product.name}</h3>
+                            <p className="text-xs text-[var(--md-primary)] font-bold mt-1">{formatCurrency(product.price)}</p>
+                          </div>
                         </div>
-                        <div className="p-3">
-                          <h3 className="text-sm font-semibold text-[var(--md-on-surface)] truncate">{product.name}</h3>
-                          <p className="text-xs text-[var(--md-primary)] font-bold mt-1">{formatCurrency(product.price)}</p>
+
+                        <div className="p-3 pt-2">
                           <button onClick={() => addItem(product)} disabled={product.status === 'inactive'}
-                            className={`mt-2 w-full h-9 rounded-[var(--md-radius-xl)] text-xs font-semibold transition-all duration-200 flex items-center justify-center gap-1 ${
+                            className={`w-full h-9 rounded-[var(--md-radius-xl)] text-xs font-semibold transition-all duration-200 flex items-center justify-center gap-1 ${
                               product.status === 'inactive'
-                                ? 'bg-[var(--md-surface-container-highest)] text-[var(--md-on-surface-variant)] cursor-not-allowed'
+                                ? 'bg-[var(--md-surface-container-highest)] text-[var(--md-on-surface-variant)] cursor-not-allowed opacity-60'
                                 : 'bg-[var(--md-primary)] text-[var(--md-on-primary)] active:scale-95'
                             }`}>
                             <Plus size={14} /> Thêm

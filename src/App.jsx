@@ -63,7 +63,7 @@ const AppRoutes = () => {
         <Route
           path="/settings"
           element={
-            <ProtectedRoute adminOnly>
+            <ProtectedRoute>
               <SettingPage />
             </ProtectedRoute>
           }

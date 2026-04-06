@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Pos công thương</string>
+    <string name="title_activity_main">Pos công thương</string>
+    <string name="package_name">com.pos.takeaway</string>
+    <string name="custom_url_scheme">com.pos.takeaway</string>
+</resources>
