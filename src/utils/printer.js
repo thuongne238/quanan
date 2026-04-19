@@ -26,6 +26,56 @@ const loadSunmiPlugin = async () => {
 // Pre-load on startup
 loadSunmiPlugin();
 
+/**
+ * Ensure the Sunmi printer service is bound and ready.
+ * Plugin returns { status: 'FoundPrinter' | 'CheckPrinter' | 'NoPrinter' | 'LostPrinter' }
+ * Retries up to 10 times with 500ms intervals (5 seconds total).
+ */
+const ensurePrinterReady = async () => {
+  if (!SunmiPrinter) {
+    const loaded = await loadSunmiPlugin();
+    if (!loaded) return false;
+  }
+
+  try {
+    // Check if already connected
+    const status = await SunmiPrinter.getServiceStatus();
+    console.log('📋 Printer status:', JSON.stringify(status));
+    if (status?.status === 'FoundPrinter') {
+      console.log('✅ Printer service already connected');
+      return true;
+    }
+  } catch (e) {
+    console.warn('⚠️ getServiceStatus failed:', e);
+  }
+
+  // Try to bind and poll for connection
+  console.log('🔄 Binding printer service...');
+  try {
+    await SunmiPrinter.bindService();
+  } catch (e) {
+    console.warn('⚠️ bindService call failed:', e);
+  }
+
+  // Poll for connection up to 10 times (5 seconds)
+  for (let i = 0; i < 10; i++) {
+    await new Promise(r => setTimeout(r, 500));
+    try {
+      const status = await SunmiPrinter.getServiceStatus();
+      console.log(`🔄 Poll ${i + 1}: status = ${status?.status}`);
+      if (status?.status === 'FoundPrinter') {
+        console.log(`✅ Printer service connected after ${(i + 1) * 500}ms`);
+        return true;
+      }
+    } catch (e) {
+      // continue polling
+    }
+  }
+
+  console.error('❌ Printer service did not connect within 5 seconds');
+  return false;
+};
+
 // ============================================
 // Helpers
 // ============================================
@@ -58,13 +108,20 @@ const printViaSunmi = async (order, storeInfo = {}) => {
     phone = '',
   } = storeInfo;
 
+  // Read bank info from localStorage
+  const bankInfo = (() => {
+    try { return JSON.parse(localStorage.getItem('pos-bank-info') || '{}'); } catch { return {}; }
+  })();
+  const bankName = bankInfo.bankName || 'TPBank';
+  const bankAccount = bankInfo.accountNumber || '18623082005';
+  const bankHolder = bankInfo.accountName || 'NGUYEN CONG THUONG';
+
   try {
-    // Check service status
-    const status = await SunmiPrinter.getServiceStatus();
-    if (!status?.connected) {
-      await SunmiPrinter.bindService();
-      // Wait a moment for service to bind
-      await new Promise(r => setTimeout(r, 500));
+    // Ensure printer service is bound and ready
+    const ready = await ensurePrinterReady();
+    if (!ready) {
+      console.error('❌ Printer service failed to initialize');
+      return false;
     }
 
     // Initialize printer and enter buffer mode
@@ -166,8 +223,9 @@ const printViaSunmi = async (order, storeInfo = {}) => {
       await SunmiPrinter.printText({ text: 'QUÉT MÃ ĐỂ THANH TOÁN\n' });
       await SunmiPrinter.setBold({ enable: false });
 
-      // Print QR code natively (much faster than image)
-      const qrContent = `https://img.vietqr.io/image/tpb-18623082005-compact2.png?amount=${order.total_amount || 0}&addInfo=${encodeURIComponent(order.id || '')}&accountName=NGUYEN%20CONG%20THUONG`;
+      // Bank abbreviation for VietQR URL (e.g. TPBank -> tpb)
+      const bankCode = bankAccount;
+      const qrContent = `https://img.vietqr.io/image/${bankName.toLowerCase().replace(/\s/g,'')}-${bankCode}-compact2.png?amount=${order.total_amount || 0}&addInfo=${encodeURIComponent(order.id || '')}&accountName=${encodeURIComponent(bankHolder)}`;
       await SunmiPrinter.printQRCode({
         content: qrContent,
         size: 8,
@@ -175,8 +233,8 @@ const printViaSunmi = async (order, storeInfo = {}) => {
       });
 
       await SunmiPrinter.setFontSize({ size: 18 });
-      await SunmiPrinter.printText({ text: 'TPBank - 18623082005\n' });
-      await SunmiPrinter.printText({ text: 'NGUYEN CONG THUONG\n' });
+      await SunmiPrinter.printText({ text: `${bankName} - ${bankAccount}\n` });
+      await SunmiPrinter.printText({ text: `${bankHolder}\n` });
       await SunmiPrinter.printText({ text: '--------------------------------\n' });
     }
 
@@ -212,6 +270,14 @@ export const generateBillHTML = (order, storeInfo = {}) => {
     phone = '',
   } = storeInfo;
 
+  // Read bank info from localStorage
+  const bankInfo = (() => {
+    try { return JSON.parse(localStorage.getItem('pos-bank-info') || '{}'); } catch { return {}; }
+  })();
+  const bankName = bankInfo.bankName || 'TPBank';
+  const bankAccount = bankInfo.accountNumber || '18623082005';
+  const bankHolder = bankInfo.accountName || 'NGUYEN CONG THUONG';
+
   const itemsRows = order.items.map(item => `
     <tr>
       <td style="text-align:left;padding:2px 0;">${item.name}</td>
@@ -224,6 +290,8 @@ export const generateBillHTML = (order, storeInfo = {}) => {
     ? order.timestamp.toDate().toLocaleString('vi-VN')
     : new Date().toLocaleString('vi-VN');
 
+  const tableName = order.table_name ? `<div style="font-size:10px;">Bàn: ${order.table_name}</div>` : '';
+
   return `
     <div id="receipt-content" style="width:100%;font-family:'Courier Prime',monospace;font-size:12px;padding:2mm;">
       <div style="text-align:center;font-weight:bold;font-size:14px;margin-bottom:4px;">${storeName}</div>
@@ -231,6 +299,7 @@ export const generateBillHTML = (order, storeInfo = {}) => {
       ${phone ? `<div style="text-align:center;font-size:10px;">ĐT: ${phone}</div>` : ''}
       <div style="border-top:1px dashed #000;margin:6px 0;"></div>
       <div style="font-size:10px;">Ngày: ${date}</div>
+      ${tableName}
       ${order.cashier_name ? `<div style="font-size:10px;">Thu ngân: ${order.cashier_name}</div>` : ''}
       ${order.payment_method ? `<div style="font-size:10px;">P.Thức: ${order.payment_method === 'transfer' ? 'CHUYỂN KHOẢN' : 'TIỀN MẶT'}</div>` : ''}
       <div style="border-top:1px dashed #000;margin:6px 0;"></div>
@@ -253,10 +322,10 @@ export const generateBillHTML = (order, storeInfo = {}) => {
       ${order.payment_method === 'transfer' ? `
       <div style="margin-top:12px;text-align:center;">
         <div style="font-size:10px;margin-bottom:4px;font-weight:bold;">QUÉT MÃ ĐỂ THANH TOÁN</div>
-        <img src="https://img.vietqr.io/image/tpb-18623082005-compact2.png?amount=${order.total_amount || 0}&addInfo=${encodeURIComponent(order.id || '')}&accountName=NGUYEN%20CONG%20THUONG" 
+        <img src="https://img.vietqr.io/image/${bankName.toLowerCase().replace(/\s/g,'')}-${bankAccount}-compact2.png?amount=${order.total_amount || 0}&addInfo=${encodeURIComponent(order.id || '')}&accountName=${encodeURIComponent(bankHolder)}" 
              style="width:160px;height:160px;margin:0 auto;display:block;" 
              alt="VietQR" />
-        <div style="font-size:9px;margin-top:4px;">TPBank - 18623082005 - NGUYEN CONG THUONG</div>
+        <div style="font-size:9px;margin-top:4px;">${bankName} - ${bankAccount} - ${bankHolder}</div>
       </div>
       ` : ''}
 
@@ -373,19 +442,25 @@ export const getPrinterInfo = async () => {
   }
 
   try {
+    // Ensure service is bound first
+    const ready = await ensurePrinterReady();
     const status = await SunmiPrinter.getServiceStatus();
+    const isConnected = status?.status === 'FoundPrinter';
+    
     let model = null;
-    try {
-      const modelResult = await SunmiPrinter.getPrinterModel();
-      model = modelResult?.model || null;
-    } catch { /* ignore */ }
+    if (isConnected) {
+      try {
+        const modelResult = await SunmiPrinter.getPrinterModel();
+        model = modelResult?.model || null;
+      } catch { /* ignore */ }
+    }
 
     return {
       isSunmiDevice: true,
       isNative: true,
-      connected: status?.connected || false,
+      connected: isConnected,
       model,
-      printMethod: 'Sunmi Capacitor Plugin ✅',
+      printMethod: isConnected ? 'Sunmi Capacitor Plugin ✅' : `Sunmi (status: ${status?.status})`,
     };
   } catch (err) {
     return {
@@ -409,6 +484,12 @@ export const testPrinter = async () => {
   const loaded = await loadSunmiPlugin();
   if (!loaded || !SunmiPrinter) {
     return { success: false, method: 'none', error: 'Sunmi plugin không tải được' };
+  }
+
+  // Ensure service is bound
+  const ready = await ensurePrinterReady();
+  if (!ready) {
+    return { success: false, method: 'Sunmi Plugin', error: 'Printer service không kết nối được' };
   }
 
   try {

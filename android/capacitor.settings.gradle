@@ -5,8 +5,5 @@ project(':capacitor-android').projectDir = new File('../node_modules/@capacitor/
 include ':capacitor-community-bluetooth-le'
 project(':capacitor-community-bluetooth-le').projectDir = new File('../node_modules/@capacitor-community/bluetooth-le/android')
 
-include ':capacitor-network'
-project(':capacitor-network').projectDir = new File('../node_modules/@capacitor/network/android')
-
 include ':kduma-autoid-capacitor-sunmi-printer'
 project(':kduma-autoid-capacitor-sunmi-printer').projectDir = new File('../node_modules/@kduma-autoid/capacitor-sunmi-printer/android')

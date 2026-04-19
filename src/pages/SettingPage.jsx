@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import {
   Settings, Users, FolderTree, Wifi, WifiOff, Bluetooth, BluetoothSearching,
   Moon, Sun, Store, Phone, MapPin, ChevronRight, ChevronDown, Plus, Trash2, Edit,
-  LogOut, Shield, Signal, UserPlus, Eye, EyeOff, Save, History, Printer
+  LogOut, Shield, Signal, UserPlus, Eye, EyeOff, Save, History, Printer, CreditCard
 } from 'lucide-react';
 import Card from '../components/ui/Card';
 import Toggle from '../components/ui/Toggle';
@@ -10,6 +10,7 @@ import Modal from '../components/ui/Modal';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { useSettings } from '../context/SettingsContext';
 import { formatCurrency, printBill, getPrinterInfo, testPrinter } from '../utils/printer';
 import { getNetworkStatus, addNetworkListener } from '../utils/network';
 import { scanDevices, isBluetoothAvailable } from '../utils/bluetooth';
@@ -19,6 +20,7 @@ import { createUserAccount } from '../firebase/auth';
 const SettingPage = () => {
   const { isDark, toggleTheme } = useTheme();
   const { user, isAdmin, logout } = useAuth();
+  const { storeInfo: savedStoreInfo, bankInfo: savedBankInfo, saveStoreInfo, saveBankInfo } = useSettings();
 
   // Network
   const [netStatus, setNetStatus] = useState({ connected: navigator.onLine, connectionType: 'unknown' });
@@ -32,6 +34,7 @@ const SettingPage = () => {
   const [editCat, setEditCat] = useState(null);
   const [catForm, setCatForm] = useState({ name: '', icon_name: 'coffee', sort_order: 0 });
   const [catError, setCatError] = useState('');
+  const [catListCollapsed, setCatListCollapsed] = useState(true);
   // Users
   const [users, setUsers] = useState([]);
   const [userModal, setUserModal] = useState(false);
@@ -40,11 +43,26 @@ const SettingPage = () => {
   const [showPw, setShowPw] = useState(false);
   const [userLoading, setUserLoading] = useState(false);
   const [userError, setUserError] = useState('');
-  // Store info
-  const [storeInfo, setStoreInfo] = useState(() => {
-    const saved = localStorage.getItem('pos-store-info');
-    return saved ? JSON.parse(saved) : { storeName: 'Pos công thương', address: '', phone: '' };
-  });
+  // Store info — local edit state, synced from context
+  const [storeInfo, setStoreInfo] = useState(savedStoreInfo);
+  const [storeSaved, setStoreSaved] = useState(false);
+  const [storeSaving, setStoreSaving] = useState(false);
+  const [storeInfoDirty, setStoreInfoDirty] = useState(false);
+
+  // Bank info — local edit state, synced from context
+  const [bankInfo, setBankInfo] = useState(savedBankInfo);
+  const [bankSaved, setBankSaved] = useState(false);
+  const [bankSaving, setBankSaving] = useState(false);
+  const [bankInfoDirty, setBankInfoDirty] = useState(false);
+
+  // Sync local state from Firestore ONLY when user has no unsaved changes
+  // This prevents onSnapshot (triggered on app resume) from overwriting user input
+  useEffect(() => {
+    if (!storeInfoDirty) setStoreInfo(savedStoreInfo);
+  }, [JSON.stringify(savedStoreInfo)]);
+  useEffect(() => {
+    if (!bankInfoDirty) setBankInfo(savedBankInfo);
+  }, [JSON.stringify(savedBankInfo)]);
 
   // Printer status
   const [printerStatus, setPrinterStatus] = useState('Đang kiểm tra...');
@@ -110,7 +128,6 @@ const SettingPage = () => {
       setPrinterStatus('✅ ' + result.method);
     } else {
       setPrinterStatus('❌ Lỗi: ' + (result.error || 'Không rõ'));
-      // Fallback: print via window.print
       printBill({
         items: [{ name: 'Test kết nối máy in', price: 0, qty: 1 }],
         total_amount: 0,
@@ -150,9 +167,7 @@ const SettingPage = () => {
     }
   };
 
-  const requestDeleteCat = (id) => {
-    setCatToDelete(id);
-  };
+  const requestDeleteCat = (id) => { setCatToDelete(id); };
 
   const confirmDeleteCat = async () => {
     if (!catToDelete) return;
@@ -188,13 +203,11 @@ const SettingPage = () => {
     setUserLoading(true);
     try {
       if (editUser) {
-        // Update existing user role/displayName in Firestore
         await update('users', editUser.id, {
           displayName: userForm.displayName,
           role: userForm.role,
         });
       } else {
-        // Create new user (Firebase Auth + Firestore)
         if (!userForm.email || !userForm.password) {
           setUserError('Email và mật khẩu là bắt buộc');
           setUserLoading(false);
@@ -230,9 +243,8 @@ const SettingPage = () => {
 
   const requestDeleteUser = (u) => {
     if (u.id === user?.uid) {
-      // Use the existing user error state to show this instead of alert
       setUserError('Không thể xóa tài khoản đang đăng nhập!');
-      setUserModal(true); // Open modal just to show the error
+      setUserModal(true);
       setTimeout(() => { setUserModal(false); setUserError(''); }, 2000);
       return;
     }
@@ -250,9 +262,34 @@ const SettingPage = () => {
     setUserToDelete(null);
   };
 
-  // Store info save
-  const saveStoreInfo = () => {
-    localStorage.setItem('pos-store-info', JSON.stringify(storeInfo));
+  // Store info save → Firestore
+  const handleSaveStoreInfo = async () => {
+    setStoreSaving(true);
+    try {
+      await saveStoreInfo(storeInfo);
+      setStoreSaved(true);
+      setStoreInfoDirty(false); // Reset dirty — now safe to sync from Firestore again
+      setTimeout(() => setStoreSaved(false), 2000);
+    } catch (err) {
+      console.error('Save store info error:', err);
+    } finally {
+      setStoreSaving(false);
+    }
+  };
+
+  // Bank info save → Firestore
+  const handleSaveBankInfo = async () => {
+    setBankSaving(true);
+    try {
+      await saveBankInfo(bankInfo);
+      setBankSaved(true);
+      setBankInfoDirty(false); // Reset dirty — now safe to sync from Firestore again
+      setTimeout(() => setBankSaved(false), 2000);
+    } catch (err) {
+      console.error('Save bank info error:', err);
+    } finally {
+      setBankSaving(false);
+    }
   };
 
   const SectionTitle = ({ icon: Icon, title }) => (
@@ -369,21 +406,63 @@ const SettingPage = () => {
           <Card variant="elevated" className="p-4 space-y-3">
             <div>
               <label className="block text-xs font-medium text-[var(--md-on-surface-variant)] mb-1 ml-1">Tên cửa hàng</label>
-              <input type="text" value={storeInfo.storeName} onChange={e => setStoreInfo({ ...storeInfo, storeName: e.target.value })} onBlur={saveStoreInfo}
+              <input type="text" value={storeInfo.storeName} onChange={e => { setStoreInfoDirty(true); setStoreInfo({ ...storeInfo, storeName: e.target.value }); }}
                 className="w-full h-10 px-3 rounded-[var(--md-radius-sm)] bg-[var(--md-surface-container-highest)] text-sm text-[var(--md-on-surface)] border border-transparent focus:border-[var(--md-primary)] focus:outline-none transition-colors" />
             </div>
             <div>
               <label className="block text-xs font-medium text-[var(--md-on-surface-variant)] mb-1 ml-1">Địa chỉ</label>
-              <input type="text" value={storeInfo.address} onChange={e => setStoreInfo({ ...storeInfo, address: e.target.value })} onBlur={saveStoreInfo}
+              <input type="text" value={storeInfo.address} onChange={e => { setStoreInfoDirty(true); setStoreInfo({ ...storeInfo, address: e.target.value }); }}
                 className="w-full h-10 px-3 rounded-[var(--md-radius-sm)] bg-[var(--md-surface-container-highest)] text-sm text-[var(--md-on-surface)] border border-transparent focus:border-[var(--md-primary)] focus:outline-none transition-colors"
                 placeholder="123 Đường ABC, Quận XYZ" />
             </div>
             <div>
               <label className="block text-xs font-medium text-[var(--md-on-surface-variant)] mb-1 ml-1">Số điện thoại</label>
-              <input type="tel" value={storeInfo.phone} onChange={e => setStoreInfo({ ...storeInfo, phone: e.target.value })} onBlur={saveStoreInfo}
+              <input type="tel" value={storeInfo.phone} onChange={e => { setStoreInfoDirty(true); setStoreInfo({ ...storeInfo, phone: e.target.value }); }}
                 className="w-full h-10 px-3 rounded-[var(--md-radius-sm)] bg-[var(--md-surface-container-highest)] text-sm text-[var(--md-on-surface)] border border-transparent focus:border-[var(--md-primary)] focus:outline-none transition-colors"
                 placeholder="0909 123 456" />
             </div>
+            <button onClick={handleSaveStoreInfo} disabled={storeSaving}
+              className={`w-full h-10 rounded-[var(--md-radius-xl)] font-semibold text-sm transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-60
+                ${storeSaved ? 'bg-green-500 text-white' : 'bg-[var(--md-primary)] text-[var(--md-on-primary)]'}`}>
+              {storeSaving
+                ? <div className="w-4 h-4 border-2 border-[var(--md-on-primary)] border-t-transparent rounded-full animate-spin" />
+                : <Save size={16} />}
+              {storeSaved ? '✓ Đã lưu!' : storeSaving ? 'Đang lưu...' : 'Lưu thông tin cửa hàng'}
+            </button>
+          </Card>
+
+          {/* ===== Bank Info (Admin) ===== */}
+          <SectionTitle icon={CreditCard} title="Thông tin chuyển khoản" />
+          <Card variant="elevated" className="p-4 space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-[var(--md-on-surface-variant)] mb-1 ml-1">Ngân hàng</label>
+              <input type="text" value={bankInfo.bankName} onChange={e => { setBankInfoDirty(true); setBankInfo({ ...bankInfo, bankName: e.target.value }); }}
+                className="w-full h-10 px-3 rounded-[var(--md-radius-sm)] bg-[var(--md-surface-container-highest)] text-sm text-[var(--md-on-surface)] border border-transparent focus:border-[var(--md-primary)] focus:outline-none transition-colors"
+                placeholder="TPBank" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[var(--md-on-surface-variant)] mb-1 ml-1">Số tài khoản</label>
+              <input type="text" value={bankInfo.accountNumber} onChange={e => { setBankInfoDirty(true); setBankInfo({ ...bankInfo, accountNumber: e.target.value }); }}
+                className="w-full h-10 px-3 rounded-[var(--md-radius-sm)] bg-[var(--md-surface-container-highest)] text-sm text-[var(--md-on-surface)] border border-transparent focus:border-[var(--md-primary)] focus:outline-none transition-colors"
+                placeholder="18623082005" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[var(--md-on-surface-variant)] mb-1 ml-1">Tên chủ tài khoản</label>
+              <input type="text" value={bankInfo.accountName} onChange={e => { setBankInfoDirty(true); setBankInfo({ ...bankInfo, accountName: e.target.value }); }}
+                className="w-full h-10 px-3 rounded-[var(--md-radius-sm)] bg-[var(--md-surface-container-highest)] text-sm text-[var(--md-on-surface)] border border-transparent focus:border-[var(--md-primary)] focus:outline-none transition-colors"
+                placeholder="NGUYEN VAN A" />
+            </div>
+            <p className="text-[10px] text-[var(--md-on-surface-variant)] ml-1">
+              💡 Tên ngân hàng dùng cho VietQR (ví dụ: TPBank, VietcomBank, MBBank...)
+            </p>
+            <button onClick={handleSaveBankInfo} disabled={bankSaving}
+              className={`w-full h-10 rounded-[var(--md-radius-xl)] font-semibold text-sm transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-60
+                ${bankSaved ? 'bg-green-500 text-white' : 'bg-[var(--md-primary)] text-[var(--md-on-primary)]'}`}>
+              {bankSaving
+                ? <div className="w-4 h-4 border-2 border-[var(--md-on-primary)] border-t-transparent rounded-full animate-spin" />
+                : <Save size={16} />}
+              {bankSaved ? '✓ Đã lưu!' : bankSaving ? 'Đang lưu...' : 'Lưu thông tin ngân hàng'}
+            </button>
           </Card>
         </>
       )}
@@ -392,31 +471,51 @@ const SettingPage = () => {
       {isAdmin && (
         <>
           <SectionTitle icon={FolderTree} title="Quản lý danh mục" />
-          <Card variant="elevated" className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm text-[var(--md-on-surface-variant)]">{categories.length} danh mục</p>
+          <Card variant="elevated" className="overflow-hidden">
+            {/* Header row */}
+            <div className="flex items-center justify-between p-4">
+              <button
+                onClick={() => setCatListCollapsed(v => !v)}
+                className="flex items-center gap-2 flex-1 text-left active:opacity-70 transition-opacity"
+              >
+                {catListCollapsed
+                  ? <ChevronRight size={18} className="text-[var(--md-on-surface-variant)]" />
+                  : <ChevronDown size={18} className="text-[var(--md-on-surface-variant)]" />
+                }
+                <p className="text-sm text-[var(--md-on-surface-variant)]">
+                  {categories.length} danh mục
+                </p>
+              </button>
               <button onClick={() => { setEditCat(null); setCatForm({ name: '', icon_name: 'coffee', sort_order: categories.length }); setCatError(''); setCatModal(true); }}
                 className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)] text-xs font-medium transition-all active:scale-95">
                 <Plus size={14} /> Thêm
               </button>
             </div>
-            <div className="space-y-2">
-              {categories.map(cat => (
-                <div key={cat.id} className="flex items-center justify-between p-2.5 rounded-[var(--md-radius-sm)] bg-[var(--md-surface-container-highest)]">
-                  <span className="text-sm text-[var(--md-on-surface)]">{cat.name}</span>
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => { setEditCat(cat); setCatForm({ name: cat.name, icon_name: cat.icon_name || 'coffee', sort_order: cat.sort_order || 0 }); setCatError(''); setCatModal(true); }}
-                      className="p-1.5 rounded-full hover:bg-[var(--md-surface-container)] transition-colors">
-                      <Edit size={14} className="text-[var(--md-on-surface-variant)]" />
-                    </button>
-                    <button onClick={() => requestDeleteCat(cat.id)}
-                      className="p-1.5 rounded-full hover:bg-[var(--md-error)]/10 transition-colors">
-                      <Trash2 size={14} className="text-[var(--md-error)]" />
-                    </button>
+
+            {/* Collapsible list */}
+            {!catListCollapsed && (
+              <div className="px-4 pb-4 space-y-2 border-t border-[var(--md-outline-variant)]">
+                <div className="h-2" />
+                {categories.length === 0 && (
+                  <p className="text-sm text-center text-[var(--md-on-surface-variant)] py-2">Chưa có danh mục</p>
+                )}
+                {categories.map(cat => (
+                  <div key={cat.id} className="flex items-center justify-between p-2.5 rounded-[var(--md-radius-sm)] bg-[var(--md-surface-container-highest)]">
+                    <span className="text-sm text-[var(--md-on-surface)]">{cat.name}</span>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => { setEditCat(cat); setCatForm({ name: cat.name, icon_name: cat.icon_name || 'coffee', sort_order: cat.sort_order || 0 }); setCatError(''); setCatModal(true); }}
+                        className="p-1.5 rounded-full hover:bg-[var(--md-surface-container)] transition-colors">
+                        <Edit size={14} className="text-[var(--md-on-surface-variant)]" />
+                      </button>
+                      <button onClick={() => requestDeleteCat(cat.id)}
+                        className="p-1.5 rounded-full hover:bg-[var(--md-error)]/10 transition-colors">
+                        <Trash2 size={14} className="text-[var(--md-error)]" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </Card>
         </>
       )}
@@ -535,7 +634,6 @@ const SettingPage = () => {
             </div>
           )}
 
-          {/* Only email+password when creating new */}
           {!editUser && (
             <>
               <div>
@@ -592,6 +690,7 @@ const SettingPage = () => {
           </button>
         </div>
       </Modal>
+
       {/* ===== Delete Confirm Dialogs ===== */}
       <ConfirmDialog
         open={!!catToDelete}

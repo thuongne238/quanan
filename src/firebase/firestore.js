@@ -60,9 +60,11 @@ export const fetchProducts = () => fetchAll('products');
 export const fetchProductsByCategory = (catId) => fetchAll('products', where('category_id', '==', catId));
 export const fetchOrders = () => fetchAll('orders', orderBy('timestamp', 'desc'));
 export const fetchUsers = () => fetchAll('users');
+export const fetchTables = () => fetchAll('tables', orderBy('sort_order'));
 
 export const createOrder = (orderData) => create('orders', {
   ...orderData,
   timestamp: serverTimestamp(),
-  status: 'completed'
+  status: 'completed',
+  source: orderData.source || 'menu',
 });

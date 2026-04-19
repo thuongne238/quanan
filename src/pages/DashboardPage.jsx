@@ -5,11 +5,14 @@ import Card from '../components/ui/Card';
 import Chip from '../components/ui/Chip';
 import { formatCurrency } from '../utils/printer';
 import { fetchOrders } from '../firebase/firestore';
-
+import { useSettings } from '../context/SettingsContext';
 const DashboardPage = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('today');
+
+  const { storeInfo } = useSettings();
+  const storeName = storeInfo.storeName || 'Pos công thương';
 
   useEffect(() => {
     const load = async () => {
@@ -98,7 +101,7 @@ const DashboardPage = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-[var(--md-on-surface)]">Bảng Điều Khiển Công Thương Pos</h1>
+          <h1 className="text-xl font-bold text-[var(--md-on-surface)]">Bảng Điều Khiển {storeName}</h1>
           <p className="text-xs text-[var(--md-on-surface-variant)] mt-0.5 flex items-center gap-1">
             <Calendar size={12} /> {todayStr}
           </p>

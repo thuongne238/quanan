@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Minus, Plus, Trash2, X, ShoppingBag } from 'lucide-react';
+import { Minus, Plus, Trash2, X, ShoppingBag, Printer, ChevronDown } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { formatCurrency } from '../../utils/printer';
 
@@ -10,6 +10,10 @@ const CartDrawer = ({ open, onClose, onCheckout }) => {
   const [isDragging, setIsDragging] = useState(false);
   const startY = useRef(0);
   const currentY = useRef(0);
+
+  // Print toggle state
+  const [printEnabled, setPrintEnabled] = useState(false);
+  const [printType, setPrintType] = useState('cash'); // 'cash' | 'transfer'
 
   const onPointerDown = useCallback((e) => {
     startY.current = e.clientY;
@@ -63,7 +67,7 @@ const CartDrawer = ({ open, onClose, onCheckout }) => {
         }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Drag handle - swipe zone */}
+        {/* Drag handle */}
         <div
           className="flex justify-center pt-3 pb-2 cursor-grab active:cursor-grabbing touch-none"
           onPointerDown={onPointerDown}
@@ -97,7 +101,7 @@ const CartDrawer = ({ open, onClose, onCheckout }) => {
         </div>
 
         {/* Items */}
-        <div className="px-5 overflow-y-auto max-h-[50vh]">
+        <div className="px-5 overflow-y-auto max-h-[40vh]">
           {items.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-[var(--md-on-surface-variant)]">
               <ShoppingBag size={48} strokeWidth={1.5} className="mb-3 opacity-40" />
@@ -134,12 +138,55 @@ const CartDrawer = ({ open, onClose, onCheckout }) => {
 
         {/* Footer */}
         {items.length > 0 && (
-          <div className="px-5 pt-3 pb-28 safe-bottom border-t border-[var(--md-outline-variant)]">
-            <div className="flex items-center justify-between mb-4">
+          <div className="px-5 pt-3 pb-28 safe-bottom border-t border-[var(--md-outline-variant)] space-y-3">
+            {/* Total */}
+            <div className="flex items-center justify-between">
               <span className="text-base font-medium text-[var(--md-on-surface-variant)]">Tổng cộng</span>
               <span className="text-xl font-bold text-[var(--md-primary)]">{formatCurrency(cartTotal)}</span>
             </div>
-            <button onClick={onCheckout}
+
+            {/* Print toggle */}
+            <div className="rounded-[var(--md-radius-lg)] bg-[var(--md-surface-container-highest)] p-3 space-y-2">
+              <button
+                onClick={() => setPrintEnabled(v => !v)}
+                className="w-full flex items-center justify-between"
+              >
+                <div className="flex items-center gap-2">
+                  <Printer size={16} className={printEnabled ? 'text-[var(--md-primary)]' : 'text-[var(--md-on-surface-variant)]'} />
+                  <span className="text-sm font-medium text-[var(--md-on-surface)]">In hóa đơn</span>
+                </div>
+                {/* Toggle pill */}
+                <div className={`w-11 h-6 rounded-full transition-colors duration-200 flex items-center px-0.5
+                  ${printEnabled ? 'bg-[var(--md-primary)]' : 'bg-[var(--md-surface-container)]'}`}>
+                  <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform duration-200
+                    ${printEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                </div>
+              </button>
+
+              {/* Print type dropdown */}
+              {printEnabled && (
+                <div className="flex gap-2 pt-1 animate-fade-in">
+                  <button
+                    onClick={() => setPrintType('cash')}
+                    className={`flex-1 py-1.5 rounded-[var(--md-radius-md)] text-xs font-semibold transition-all
+                      ${printType === 'cash'
+                        ? 'bg-[var(--md-primary)] text-[var(--md-on-primary)]'
+                        : 'bg-[var(--md-surface-container)] text-[var(--md-on-surface-variant)]'}`}>
+                    💵 Tiền mặt
+                  </button>
+                  <button
+                    onClick={() => setPrintType('transfer')}
+                    className={`flex-1 py-1.5 rounded-[var(--md-radius-md)] text-xs font-semibold transition-all
+                      ${printType === 'transfer'
+                        ? 'bg-[var(--md-primary)] text-[var(--md-on-primary)]'
+                        : 'bg-[var(--md-surface-container)] text-[var(--md-on-surface-variant)]'}`}>
+                    📱 QR Chuyển khoản
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <button onClick={() => onCheckout({ printEnabled, printType })}
               className="w-full h-14 rounded-[var(--md-radius-xl)] bg-[var(--md-primary)] text-[var(--md-on-primary)] font-semibold text-base transition-all duration-200 active:scale-[0.98] elevation-1 hover:elevation-2">
               Thanh toán • {formatCurrency(cartTotal)}
             </button>

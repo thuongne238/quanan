@@ -1,10 +1,11 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, UtensilsCrossed, Receipt, Settings } from 'lucide-react';
+import { LayoutDashboard, UtensilsCrossed, Receipt, Settings, LayoutGrid } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 const tabs = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, adminOnly: true },
   { path: '/menu', label: 'Thực đơn', icon: UtensilsCrossed },
+  { path: '/tables', label: 'Bàn', icon: LayoutGrid },
   { path: '/bills', label: 'Hóa đơn', icon: Receipt },
   { path: '/settings', label: 'Cài đặt', icon: Settings },
 ];
@@ -33,14 +34,14 @@ const BottomNav = () => {
               onClick={() => navigate(tab.path)}
               className="
                 flex flex-col items-center justify-center gap-1
-                min-w-[64px] py-1 transition-all duration-200
+                min-w-[56px] py-1 transition-all duration-200
                 group relative
               "
             >
               {/* Pill indicator */}
               <div className={`
                 relative flex items-center justify-center
-                w-16 h-8 rounded-full transition-all duration-300
+                w-14 h-8 rounded-full transition-all duration-300
                 ${active
                   ? 'bg-[var(--md-secondary-container)]'
                   : 'bg-transparent group-hover:bg-[var(--md-surface-container-highest)]'
@@ -57,7 +58,7 @@ const BottomNav = () => {
                 />
               </div>
               <span className={`
-                text-xs font-medium transition-colors duration-200
+                text-[10px] font-medium transition-colors duration-200
                 ${active ? 'text-[var(--md-on-surface)]' : 'text-[var(--md-on-surface-variant)]'}
               `}>
                 {tab.label}

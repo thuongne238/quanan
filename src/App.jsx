@@ -3,11 +3,13 @@ import LoadingScreen from './components/ui/LoadingScreen';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { CartProvider } from './context/CartContext';
+import { SettingsProvider } from './context/SettingsContext';
 import AppShell from './components/layout/AppShell';
 import ProtectedRoute from './components/layout/ProtectedRoute';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import FoodDrinkPage from './pages/FoodDrinkPage';
+import TablePage from './pages/TablePage';
 import BillPage from './pages/BillPage';
 import SettingPage from './pages/SettingPage';
 
@@ -53,6 +55,14 @@ const AppRoutes = () => {
           }
         />
         <Route
+          path="/tables"
+          element={
+            <ProtectedRoute>
+              <TablePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/bills"
           element={
             <ProtectedRoute>
@@ -80,9 +90,11 @@ const App = () => {
     <BrowserRouter>
       <ThemeProvider>
         <AuthProvider>
-          <CartProvider>
-            <AppRoutes />
-          </CartProvider>
+          <SettingsProvider>
+            <CartProvider>
+              <AppRoutes />
+            </CartProvider>
+          </SettingsProvider>
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>

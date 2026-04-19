@@ -6,11 +6,13 @@ import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { formatCurrency, printBill } from '../utils/printer';
 import { fetchOrders, fetchProducts, fetchCategories, createOrder, remove } from '../firebase/firestore';
 import { useAuth } from '../context/AuthContext';
+import { useSettings } from '../context/SettingsContext';
 
 const BillPage = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [sourceFilter, setSourceFilter] = useState('all'); // 'all' | 'menu' | 'table'
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [expandedDates, setExpandedDates] = useState(() => {
     try {
@@ -26,6 +28,7 @@ const BillPage = () => {
   }, [expandedDates]);
 
   const { user, isAdmin } = useAuth();
+  const { storeInfo } = useSettings();
 
   // New order creation
   const [newOrderModal, setNewOrderModal] = useState(false);
@@ -54,6 +57,9 @@ const BillPage = () => {
 
   const filtered = useMemo(() => {
     let result = orders;
+    if (sourceFilter !== 'all') {
+      result = result.filter(o => (o.source || 'menu') === sourceFilter);
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       result = result.filter(o =>
@@ -63,7 +69,7 @@ const BillPage = () => {
       );
     }
     return result;
-  }, [orders, search]);
+  }, [orders, search, sourceFilter]);
 
   const groupedOrders = useMemo(() => {
     const groups = {};
@@ -225,6 +231,7 @@ const BillPage = () => {
         cashier_id: user?.uid || 'unknown',
         cashier_name: user?.displayName || user?.email || 'Staff',
         payment_method: paymentMethod,
+        source: 'menu',
       });
       // Refresh orders
       const data = await fetchOrders();
@@ -265,7 +272,22 @@ const BillPage = () => {
             className="w-full h-11 pl-10 pr-4 rounded-[var(--md-radius-xl)] bg-[var(--md-surface-container-highest)] text-[var(--md-on-surface)] text-sm border border-transparent focus:border-[var(--md-primary)] focus:outline-none transition-colors placeholder:text-[var(--md-on-surface-variant)]/50" />
         </div>
       </div>
-
+      {/* Filter chips */}
+        <div className="flex gap-2 px-4 pb-2 overflow-x-auto">
+          {[
+            { key: 'all', label: '🧾 Tất cả' },
+            { key: 'menu', label: '🛍️ Mua về' },
+            { key: 'table', label: '🪑 Tại bàn' },
+          ].map(f => (
+            <button key={f.key} onClick={() => setSourceFilter(f.key)}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all
+                ${sourceFilter === f.key
+                  ? 'bg-[var(--md-primary)] text-[var(--md-on-primary)]'
+                  : 'bg-[var(--md-surface-container-highest)] text-[var(--md-on-surface-variant)]'}`}>
+              {f.label}
+            </button>
+          ))}
+        </div>
       {/* Orders list */}
       <div className="px-4 mt-2 space-y-4 pb-4">
         {groupedOrders.length === 0 ? (
@@ -374,7 +396,7 @@ const BillPage = () => {
               <span className="text-xl font-bold text-[var(--md-primary)]">{formatCurrency(selectedOrder.total_amount || 0)}</span>
             </div>
             <div className="flex gap-2">
-              <button onClick={() => printBill(selectedOrder)}
+              <button onClick={() => { printBill(selectedOrder, storeInfo); }}
                 className="flex-1 h-12 rounded-[var(--md-radius-xl)] bg-[var(--md-secondary-container)] text-[var(--md-on-secondary-container)] font-semibold text-sm transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2">
                 <Printer size={18} /> In hóa đơn
               </button>

@@ -8,7 +8,8 @@ import Modal from '../components/ui/Modal';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { formatCurrency } from '../utils/printer';
+import { useSettings } from '../context/SettingsContext';
+import { formatCurrency, printBill } from '../utils/printer';
 import { fetchCategories, fetchProducts, createOrder, create, update, remove } from '../firebase/firestore';
 
 const iconMap = {
@@ -26,6 +27,7 @@ const FoodDrinkPage = () => {
   const [checkoutSuccess, setCheckoutSuccess] = useState(false);
   const { addItem, items: cartItems, cartCount, clearCart, cartTotal } = useCart();
   const { user, isAdmin } = useAuth();
+  const { storeInfo } = useSettings();
 
   // Product modal
   const [productModal, setProductModal] = useState(false);
@@ -88,14 +90,20 @@ const FoodDrinkPage = () => {
     setCollapsedCats(prev => ({ ...prev, [catId]: !prev[catId] }));
   };
 
-  const handleCheckout = async () => {
+  const handleCheckout = async (printOptions = {}) => {
     try {
-      await createOrder({
+      const orderData = {
         items: cartItems.map(i => ({ name: i.name, price: i.price, qty: i.qty })),
         total_amount: cartTotal,
         cashier_id: user?.uid || 'unknown',
         cashier_name: user?.displayName || user?.email || 'Staff',
-      });
+        source: 'menu',
+        payment_method: printOptions.printEnabled ? printOptions.printType : 'cash',
+      };
+      await createOrder(orderData);
+      if (printOptions.printEnabled) {
+        await printBill({ ...orderData, timestamp: new Date() }, storeInfo);
+      }
       clearCart();
       setCartOpen(false);
       setCheckoutSuccess(true);

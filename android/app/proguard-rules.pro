@@ -19,3 +19,9 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Sunmi Printer AIDL — keep all classes needed for service binding
+-keep class woyou.aidlservice.jiuiv5.** { *; }
+-keep class com.sunmi.peripheral.printer.** { *; }
+-keep class dev.duma.capacitor.sunmiprinter.** { *; }
+-keep class dev.duma.android.sunmi.** { *; }

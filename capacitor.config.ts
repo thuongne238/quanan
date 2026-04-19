@@ -9,7 +9,7 @@ const config: CapacitorConfig = {
   },
   plugins: {
     SunmiPrinter: {
-      bindOnLoad: true
+      bindOnLoad: false
     }
   }
 };
