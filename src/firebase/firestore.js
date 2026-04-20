@@ -63,8 +63,8 @@ export const fetchUsers = () => fetchAll('users');
 export const fetchTables = () => fetchAll('tables', orderBy('sort_order'));
 
 export const createOrder = (orderData) => create('orders', {
+  status: 'completed',
   ...orderData,
   timestamp: serverTimestamp(),
-  status: 'completed',
   source: orderData.source || 'menu',
 });

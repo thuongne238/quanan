@@ -35,7 +35,7 @@ const TablePage = () => {
   // Menu / ordering for a table
   const [activeTable, setActiveTable] = useState(null); // the table being ordered/viewed
   const [menuOpen, setMenuOpen] = useState(false);      // open menu panel
-  const [billOpen, setBillOpen] = useState(false);      // open bill panel
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false); // open payment modal
 
   // Menu data
   const [categories, setCategories] = useState([]);
@@ -121,19 +121,10 @@ const TablePage = () => {
   // ===== Click on table =====
   const handleTableClick = (table) => {
     setActiveTable(table);
-    if (table.status === 'empty') {
-      // Open menu to order
-      setOrderItems([]);
-      setProductSearch('');
-      setPrintEnabled(false);
-      setPrintType('cash');
-      setMenuOpen(true);
-      setBillOpen(false);
-    } else {
-      // Table occupied → show bill
-      setBillOpen(true);
-      setMenuOpen(false);
-    }
+    setOrderItems(table.status === 'occupied' ? (table.current_order?.items || []) : []);
+    setProductSearch('');
+    setPrintEnabled(false);
+    setMenuOpen(true);
   };
 
   // ===== Menu helpers =====
@@ -188,21 +179,28 @@ const TablePage = () => {
     setSubmitting(true);
     try {
       const orderData = {
-        items: orderItems.map(i => ({ name: i.name, price: i.price, qty: i.qty })),
+        items: orderItems.map(i => ({ id: i.id, name: i.name, price: i.price, qty: i.qty })),
         total_amount: orderTotal,
         cashier_id: user?.uid || 'unknown',
         cashier_name: user?.displayName || user?.email || 'Staff',
-        payment_method: printEnabled ? printType : 'cash',
         source: 'table',
         table_name: activeTable.name,
         table_id: activeTable.id,
+        status: 'note'
       };
-      const orderId = await createOrder(orderData);
-      // Mark table occupied, store orderId
-      await update('tables', activeTable.id, { status: 'occupied', current_order: { ...orderData, id: orderId } });
-      if (printEnabled) {
-        await printBill({ ...orderData, id: orderId, timestamp: new Date() }, storeInfo);
+
+      let orderId;
+      if (activeTable.current_order?.id) {
+        orderId = activeTable.current_order.id;
+        await update('orders', orderId, orderData);
+      } else {
+        orderId = await createOrder(orderData);
       }
+
+      const updatedOrder = { ...orderData, id: orderId };
+      // Mark table occupied, store orderId
+      await update('tables', activeTable.id, { status: 'occupied', current_order: updatedOrder });
+
       // Refresh tables
       const freshTables = await fetchTables();
       setTables(freshTables);
@@ -216,14 +214,40 @@ const TablePage = () => {
   };
 
   // ===== Mark table paid =====
-  const handlePaid = async () => {
+  const handlePaid = async (paymentMethod) => {
     if (!activeTable) return;
     setSubmitting(true);
     try {
+      const finalOrderData = {
+        items: orderItems.map(i => ({ id: i.id, name: i.name, price: i.price, qty: i.qty })),
+        total_amount: orderTotal,
+        cashier_id: user?.uid || 'unknown',
+        cashier_name: user?.displayName || user?.email || 'Staff',
+        source: 'table',
+        table_name: activeTable.name,
+        table_id: activeTable.id,
+        status: 'completed',
+        payment_method: paymentMethod
+      };
+
+      let orderId;
+      if (activeTable.current_order?.id) {
+        orderId = activeTable.current_order.id;
+        await update('orders', orderId, finalOrderData);
+      } else {
+        orderId = await createOrder(finalOrderData);
+      }
+
       await update('tables', activeTable.id, { status: 'empty', current_order: null });
+
+      if (printEnabled) {
+        await printBill({ ...finalOrderData, id: orderId, timestamp: new Date() }, storeInfo);
+      }
+
       const freshTables = await fetchTables();
       setTables(freshTables);
-      setBillOpen(false);
+      setPaymentModalOpen(false);
+      setMenuOpen(false);
       setActiveTable(null);
     } catch (err) {
       console.error('Mark paid error:', err);
@@ -436,116 +460,94 @@ const TablePage = () => {
                 </button>
               </div>
               {orderItems.map(item => (
-                <div key={item.id} className="flex justify-between text-sm p-2 rounded-[var(--md-radius-sm)] bg-[var(--md-surface-container-low)]">
-                  <span className="text-[var(--md-on-surface)] flex-1 truncate">{item.name} <span className="text-[var(--md-on-surface-variant)]">x{item.qty}</span></span>
-                  <span className="font-medium text-[var(--md-on-surface)] ml-2">{formatCurrency(item.price * item.qty)}</span>
+                <div key={item.id} className="flex items-center justify-between text-sm p-2 rounded-[var(--md-radius-sm)] bg-[var(--md-surface-container-low)]">
+                  <div className="flex-1 truncate pr-2">
+                    <span className="text-[var(--md-on-surface)]">{item.name} </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-medium text-[var(--md-on-surface)] w-16 text-right">{formatCurrency(item.price * item.qty)}</span>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => updateItemQty(item.id, item.qty - 1)}
+                        className="w-7 h-7 flex items-center justify-center rounded-full bg-[var(--md-surface-container-highest)] hover:bg-[var(--md-surface-container)] transition-colors">
+                        {item.qty === 1 ? <Trash2 size={12} className="text-[var(--md-error)]" /> : <Minus size={12} />}
+                      </button>
+                      <span className="w-6 text-center text-sm font-semibold text-[var(--md-on-surface)]">{item.qty}</span>
+                      <button onClick={() => updateItemQty(item.id, item.qty + 1)}
+                        className="w-7 h-7 flex items-center justify-center rounded-full bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)] transition-colors active:scale-95">
+                        <Plus size={12} />
+                      </button>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
           )}
 
-          {/* Print toggle */}
-          <div className="rounded-[var(--md-radius-lg)] bg-[var(--md-surface-container-highest)] p-3 space-y-2">
-            <button onClick={() => setPrintEnabled(v => !v)} className="w-full flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Printer size={16} className={printEnabled ? 'text-[var(--md-primary)]' : 'text-[var(--md-on-surface-variant)]'} />
-                <span className="text-sm font-medium text-[var(--md-on-surface)]">In hóa đơn</span>
-              </div>
-              <div className={`w-11 h-6 rounded-full transition-colors duration-200 flex items-center px-0.5 ${printEnabled ? 'bg-[var(--md-primary)]' : 'bg-[var(--md-surface-container)]'}`}>
-                <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${printEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
-              </div>
-            </button>
-            {printEnabled && (
-              <div className="flex gap-2 pt-1 animate-fade-in">
-                <button onClick={() => setPrintType('cash')}
-                  className={`flex-1 py-1.5 rounded-[var(--md-radius-md)] text-xs font-semibold transition-all ${printType === 'cash' ? 'bg-[var(--md-primary)] text-[var(--md-on-primary)]' : 'bg-[var(--md-surface-container)] text-[var(--md-on-surface-variant)]'}`}>
-                  💵 Tiền mặt
-                </button>
-                <button onClick={() => setPrintType('transfer')}
-                  className={`flex-1 py-1.5 rounded-[var(--md-radius-md)] text-xs font-semibold transition-all ${printType === 'transfer' ? 'bg-[var(--md-primary)] text-[var(--md-on-primary)]' : 'bg-[var(--md-surface-container)] text-[var(--md-on-surface-variant)]'}`}>
-                  📱 QR Chuyển khoản
-                </button>
-              </div>
-            )}
-          </div>
-
           {/* Checkout button */}
           {orderItems.length > 0 && (
-            <div className="border-t border-[var(--md-outline-variant)] pt-3">
+            <div className="border-t border-[var(--md-outline-variant)] pt-3 mt-4">
               <div className="flex justify-between items-center mb-3">
                 <span className="text-base font-medium text-[var(--md-on-surface-variant)]">Tổng cộng</span>
                 <span className="text-xl font-bold text-[var(--md-primary)]">{formatCurrency(orderTotal)}</span>
               </div>
-              <button onClick={handleCheckout} disabled={submitting}
-                className="w-full h-12 rounded-[var(--md-radius-xl)] bg-[var(--md-primary)] text-[var(--md-on-primary)] font-semibold text-sm transition-all duration-200 active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-2">
-                {submitting
-                  ? <div className="w-5 h-5 border-2 border-[var(--md-on-primary)] border-t-transparent rounded-full animate-spin" />
-                  : <>Xác nhận đặt bàn • {formatCurrency(orderTotal)}</>
-                }
-              </button>
+              <div className="flex gap-2">
+                <button onClick={handleCheckout} disabled={submitting}
+                  className="flex-1 h-12 rounded-[var(--md-radius-xl)] bg-[var(--md-secondary-container)] text-[var(--md-on-secondary-container)] font-semibold text-sm transition-all duration-200 active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-2">
+                  {submitting
+                    ? <div className="w-5 h-5 border-2 border-[var(--md-on-secondary-container-content)] border-t-transparent rounded-full animate-spin" />
+                    : <>Tạm lưu chờ thanh toán</>
+                  }
+                </button>
+                <button onClick={() => setPaymentModalOpen(true)} disabled={submitting}
+                  className="flex-[2] h-12 rounded-[var(--md-radius-xl)] bg-[var(--md-primary)] text-[var(--md-on-primary)] font-semibold text-sm transition-all duration-200 active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-2">
+                  Thanh toán ngay
+                </button>
+              </div>
             </div>
           )}
         </div>
       </Modal>
 
-      {/* ===== Bill Panel (occupied table) ===== */}
-      <Modal open={billOpen} onClose={() => { setBillOpen(false); setActiveTable(null); }}
-        title={`Hóa đơn — ${activeTable?.name || ''}`} size="sheet">
-        {activeTable?.current_order && (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-[var(--md-on-surface-variant)]">Bàn:</span>
-                <span className="font-semibold text-[var(--md-primary)]">{activeTable.name}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-[var(--md-on-surface-variant)]">Thu ngân:</span>
-                <span className="text-[var(--md-on-surface)]">{activeTable.current_order.cashier_name || '--'}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-[var(--md-on-surface-variant)]">Phương thức:</span>
-                <span className="font-bold text-[var(--md-on-surface)]">
-                  {activeTable.current_order.payment_method === 'transfer' ? 'Chuyển khoản' : 'Tiền mặt'}
-                </span>
-              </div>
-            </div>
+      {/* ===== Payment Selection Modal ===== */}
+      <Modal open={paymentModalOpen} onClose={() => setPaymentModalOpen(false)} title="Thanh toán" size="sm">
+        <div className="space-y-4">
+          <div className="text-center bg-[var(--md-surface-container-highest)] py-4 rounded-[var(--md-radius-lg)]">
+            <h3 className="text-3xl font-bold text-[var(--md-primary)] mb-1">
+              {formatCurrency(orderTotal)}
+            </h3>
+            <p className="text-sm font-medium text-[var(--md-on-surface-variant)]">
+              {activeTable?.name}
+            </p>
+          </div>
 
-            <div className="border-t border-[var(--md-outline-variant)] pt-3">
-              <h4 className="text-sm font-medium text-[var(--md-on-surface)] mb-2">Danh sách món</h4>
-              <div className="space-y-2">
-                {activeTable.current_order.items?.map((item, i) => (
-                  <div key={i} className="flex justify-between text-sm">
-                    <span className="text-[var(--md-on-surface)]">{item.name} <span className="text-[var(--md-on-surface-variant)]">x{item.qty}</span></span>
-                    <span className="font-medium text-[var(--md-on-surface)]">{formatCurrency(item.price * item.qty)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="border-t border-[var(--md-outline-variant)] pt-3 flex justify-between items-center">
-              <span className="text-base font-medium text-[var(--md-on-surface)]">Tổng cộng</span>
-              <span className="text-xl font-bold text-[var(--md-primary)]">{formatCurrency(activeTable.current_order.total_amount || 0)}</span>
-            </div>
-
-            {/* Action buttons */}
-            <div className="flex gap-2">
-              <button onClick={() => {
-                const order = activeTable.current_order;
-                printBill({ ...order, timestamp: new Date() }, storeInfo);
-              }}
-                className="flex-1 h-12 rounded-[var(--md-radius-xl)] bg-[var(--md-secondary-container)] text-[var(--md-on-secondary-container)] font-semibold text-sm transition-all active:scale-[0.98] flex items-center justify-center gap-2">
-                <Printer size={18} /> In hóa đơn
+          <div>
+            <h4 className="text-sm font-medium text-[var(--md-on-surface)] mb-2">Chọn phương thức:</h4>
+            <div className="flex gap-3">
+              <button onClick={() => handlePaid('cash')} disabled={submitting}
+                className="flex-[1] flex flex-col items-center justify-center p-4 rounded-[var(--md-radius-xl)] bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)] transition-all hover:bg-[var(--md-primary)] hover:text-[var(--md-on-primary)] active:scale-95 disabled:opacity-50">
+                <span className="text-3xl mb-2">💵</span>
+                <span className="text-sm font-bold">Tiền mặt</span>
               </button>
-              <button onClick={handlePaid} disabled={submitting}
-                className="flex-1 h-12 rounded-[var(--md-radius-xl)] bg-[var(--md-primary)] text-[var(--md-on-primary)] font-semibold text-sm transition-all active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-2">
-                {submitting
-                  ? <div className="w-5 h-5 border-2 border-[var(--md-on-primary)] border-t-transparent rounded-full animate-spin" />
-                  : <><Check size={18} /> Đã thanh toán</>
-                }
+              <button onClick={() => handlePaid('transfer')} disabled={submitting}
+                className="flex-[1] flex flex-col items-center justify-center p-4 rounded-[var(--md-radius-xl)] bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)] transition-all hover:bg-[var(--md-primary)] hover:text-[var(--md-on-primary)] active:scale-95 disabled:opacity-50">
+                <span className="text-3xl mb-2">📱</span>
+                <span className="text-sm font-bold">Chuyển khoản</span>
               </button>
             </div>
           </div>
-        )}
+
+          <div className="rounded-[var(--md-radius-lg)] bg-[var(--md-surface-container-highest)] p-3 mt-2">
+            <button onClick={() => setPrintEnabled(v => !v)} className="w-full flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Printer size={16} className={printEnabled ? 'text-[var(--md-primary)]' : 'text-[var(--md-on-surface-variant)]'} />
+                <span className="text-sm font-medium text-[var(--md-on-surface)]">In hóa đơn sau thanh toán</span>
+              </div>
+              <div className={`w-11 h-6 rounded-full transition-colors duration-200 flex items-center px-0.5 ${printEnabled ? 'bg-[var(--md-primary)]' : 'bg-[var(--md-surface-container)]'}`}>
+                <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${printEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+              </div>
+            </button>
+          </div>
+        </div>
       </Modal>
 
       {/* ===== Delete Confirm ===== */}
