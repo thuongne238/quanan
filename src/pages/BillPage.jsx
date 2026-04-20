@@ -273,21 +273,21 @@ const BillPage = () => {
         </div>
       </div>
       {/* Filter chips */}
-        <div className="flex gap-2 px-4 pb-2 overflow-x-auto">
-          {[
-            { key: 'all', label: '🧾 Tất cả' },
-            { key: 'menu', label: '🛍️ Mua về' },
-            { key: 'table', label: '🪑 Tại bàn' },
-          ].map(f => (
-            <button key={f.key} onClick={() => setSourceFilter(f.key)}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all
+      <div className="flex gap-2 px-4 pb-2 overflow-x-auto">
+        {[
+          { key: 'all', label: '🧾 Tất cả' },
+          { key: 'menu', label: '🛍️ Mua về' },
+          { key: 'table', label: '🪑 Tại bàn' },
+        ].map(f => (
+          <button key={f.key} onClick={() => setSourceFilter(f.key)}
+            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all
                 ${sourceFilter === f.key
-                  ? 'bg-[var(--md-primary)] text-[var(--md-on-primary)]'
-                  : 'bg-[var(--md-surface-container-highest)] text-[var(--md-on-surface-variant)]'}`}>
-              {f.label}
-            </button>
-          ))}
-        </div>
+                ? 'bg-[var(--md-primary)] text-[var(--md-on-primary)]'
+                : 'bg-[var(--md-surface-container-highest)] text-[var(--md-on-surface-variant)]'}`}>
+            {f.label}
+          </button>
+        ))}
+      </div>
       {/* Orders list */}
       <div className="px-4 mt-2 space-y-4 pb-4">
         {groupedOrders.length === 0 ? (
@@ -305,7 +305,7 @@ const BillPage = () => {
             const totalForDay = group.orders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
             return (
               <div key={group.date} className="space-y-2">
-                <button 
+                <button
                   onClick={() => toggleDateGroup(group.date)}
                   className="w-full flex items-center justify-between py-2 px-1 text-sm font-medium text-[var(--md-on-surface-variant)] active:opacity-70 transition-opacity"
                 >
@@ -315,7 +315,7 @@ const BillPage = () => {
                   </div>
                   <span className="text-[var(--md-primary)] font-semibold">{formatCurrency(totalForDay)}</span>
                 </button>
-                
+
                 {isExpanded && (
                   <div className="space-y-2">
                     {group.orders.map(order => (
@@ -329,11 +329,10 @@ const BillPage = () => {
                                 {order.cashier_name || 'Staff'}
                               </span>
                               {order.payment_method && (
-                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
-                                  order.payment_method === 'transfer' 
-                                    ? 'border-[var(--md-primary)] text-[var(--md-primary)] bg-[var(--md-primary-container)]/10' 
-                                    : 'border-[var(--md-outline-variant)] text-[var(--md-on-surface-variant)] bg-[var(--md-surface-container-highest)]'
-                                }`}>
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${order.payment_method === 'transfer'
+                                  ? 'border-[var(--md-primary)] text-[var(--md-primary)] bg-[var(--md-primary-container)]/10'
+                                  : 'border-[var(--md-outline-variant)] text-[var(--md-on-surface-variant)] bg-[var(--md-surface-container-highest)]'
+                                  }`}>
                                   {order.payment_method === 'transfer' ? 'Chuyển khoản' : 'Tiền mặt'}
                                 </span>
                               )}
@@ -517,26 +516,24 @@ const BillPage = () => {
           <div className="space-y-2">
             <h4 className="text-sm font-medium text-[var(--md-on-surface)]">Phương thức thanh toán</h4>
             <div className="flex gap-2">
-              <button 
+              <button
                 type="button"
                 onClick={() => setPaymentMethod('cash')}
-                className={`flex-1 flex flex-col items-center justify-center p-3 rounded-[var(--md-radius-lg)] border-2 transition-all ${
-                  paymentMethod === 'cash' 
-                    ? 'border-[var(--md-primary)] bg-[var(--md-primary-container)]/10 text-[var(--md-primary)]' 
-                    : 'border-[var(--md-outline-variant)] text-[var(--md-on-surface-variant)] hover:border-[var(--md-on-surface-variant)]'
-                }`}
+                className={`flex-1 flex flex-col items-center justify-center p-3 rounded-[var(--md-radius-lg)] border-2 transition-all ${paymentMethod === 'cash'
+                  ? 'border-[var(--md-primary)] bg-[var(--md-primary-container)]/10 text-[var(--md-primary)]'
+                  : 'border-[var(--md-outline-variant)] text-[var(--md-on-surface-variant)] hover:border-[var(--md-on-surface-variant)]'
+                  }`}
               >
                 <span className="text-sm font-bold">Tiền mặt</span>
                 <span className="text-[10px] opacity-70">Thanh toán tay</span>
               </button>
-              <button 
+              <button
                 type="button"
                 onClick={() => setPaymentMethod('transfer')}
-                className={`flex-1 flex flex-col items-center justify-center p-3 rounded-[var(--md-radius-lg)] border-2 transition-all ${
-                  paymentMethod === 'transfer' 
-                    ? 'border-[var(--md-primary)] bg-[var(--md-primary-container)]/10 text-[var(--md-primary)]' 
-                    : 'border-[var(--md-outline-variant)] text-[var(--md-on-surface-variant)] hover:border-[var(--md-on-surface-variant)]'
-                }`}
+                className={`flex-1 flex flex-col items-center justify-center p-3 rounded-[var(--md-radius-lg)] border-2 transition-all ${paymentMethod === 'transfer'
+                  ? 'border-[var(--md-primary)] bg-[var(--md-primary-container)]/10 text-[var(--md-primary)]'
+                  : 'border-[var(--md-outline-variant)] text-[var(--md-on-surface-variant)] hover:border-[var(--md-on-surface-variant)]'
+                  }`}
               >
                 <span className="text-sm font-bold">Chuyển khoản</span>
                 <span className="text-[10px] opacity-70">Quét mã VietQR</span>

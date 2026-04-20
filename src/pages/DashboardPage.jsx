@@ -1,18 +1,18 @@
 import { useState, useEffect } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import { TrendingUp, ShoppingBag, DollarSign, Star, Calendar } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { TrendingUp, ShoppingBag, DollarSign, Star, Calendar, BarChart3 } from 'lucide-react';
 import Card from '../components/ui/Card';
-import Chip from '../components/ui/Chip';
 import { formatCurrency } from '../utils/printer';
 import { fetchOrders } from '../firebase/firestore';
 import { useSettings } from '../context/SettingsContext';
+
 const DashboardPage = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('today');
 
   const { storeInfo } = useSettings();
-  const storeName = storeInfo.storeName || 'Pos công thương';
+  const storeName = storeInfo.storeName || 'Cửa hàng';
 
   useEffect(() => {
     const load = async () => {
@@ -28,7 +28,6 @@ const DashboardPage = () => {
     load();
   }, []);
 
-  // Process data for charts
   const now = new Date();
   const todayStr = now.toLocaleDateString('vi-VN');
 
@@ -50,7 +49,6 @@ const DashboardPage = () => {
   const totalOrders = filteredOrders.length;
   const avgOrder = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
-  // Best selling items
   const itemCounts = {};
   filteredOrders.forEach(o => {
     o.items?.forEach(item => {
@@ -61,31 +59,28 @@ const DashboardPage = () => {
   });
   const topItems = Object.values(itemCounts).sort((a, b) => b.count - a.count).slice(0, 5);
 
-  // Revenue chart data (hourly for today, daily otherwise)
   const chartData = (() => {
     if (period === 'today') {
-      const hours = Array.from({ length: 24 }, (_, i) => ({ name: `${i}h`, revenue: 0, orders: 0 }));
+      const hours = Array.from({ length: 24 }, (_, i) => ({ name: `${i}h`, revenue: 0 }));
       filteredOrders.forEach(o => {
         const h = (o.timestamp?.toDate ? o.timestamp.toDate() : new Date(o.timestamp)).getHours();
         hours[h].revenue += o.total_amount || 0;
-        hours[h].orders += 1;
       });
-      return hours.filter(h => h.revenue > 0 || h.orders > 0);
+      return hours.filter(h => h.revenue > 0);
     }
     const days = {};
     filteredOrders.forEach(o => {
-      const d = (o.timestamp?.toDate ? o.timestamp.toDate() : new Date(o.timestamp)).toLocaleDateString('vi-VN');
-      if (!days[d]) days[d] = { name: d, revenue: 0, orders: 0 };
+      const d = (o.timestamp?.toDate ? o.timestamp.toDate() : new Date(o.timestamp)).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+      if (!days[d]) days[d] = { name: d, revenue: 0 };
       days[d].revenue += o.total_amount || 0;
-      days[d].orders += 1;
     });
     return Object.values(days);
   })();
 
   const stats = [
-    { label: 'Doanh thu', value: formatCurrency(totalRevenue), icon: DollarSign, color: 'var(--md-primary)' },
-    { label: 'Đơn hàng', value: totalOrders, icon: ShoppingBag, color: 'var(--md-tertiary)' },
-    { label: 'TB / Đơn', value: formatCurrency(avgOrder), icon: TrendingUp, color: 'var(--md-secondary)' },
+    { label: 'Doanh thu', value: formatCurrency(totalRevenue), icon: DollarSign, color: 'var(--md-primary)', bg: 'var(--md-primary-container)' },
+    { label: 'Đơn hàng', value: totalOrders, icon: ShoppingBag, color: 'var(--md-tertiary)', bg: 'var(--md-tertiary-container)' },
+    { label: 'TB/Đơn', value: formatCurrency(avgOrder), icon: TrendingUp, color: 'var(--md-secondary)', bg: 'var(--md-secondary-container)' },
   ];
 
   if (loading) {
@@ -97,108 +92,108 @@ const DashboardPage = () => {
   }
 
   return (
-    <div className="p-4 max-w-lg mx-auto space-y-5 animate-fade-in">
+    <div className="p-4 max-w-lg mx-auto space-y-6 animate-fade-in pb-10">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex justify-between items-end">
         <div>
-          <h1 className="text-xl font-bold text-[var(--md-on-surface)]">Bảng Điều Khiển {storeName}</h1>
-          <p className="text-xs text-[var(--md-on-surface-variant)] mt-0.5 flex items-center gap-1">
-            <Calendar size={12} /> {todayStr}
-          </p>
+          <h1 className="text-2xl font-black text-[var(--md-on-surface)] leading-none">Báo cáo</h1>
+          <p className="text-xs font-bold text-[var(--md-primary)] uppercase tracking-wider mt-2">{storeName}</p>
+        </div>
+        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--md-surface-container-high)] rounded-full text-[10px] font-bold text-[var(--md-on-surface-variant)]">
+          <Calendar size={12} /> {todayStr}
         </div>
       </div>
 
-      {/* Period chips */}
-      <div className="flex gap-2">
-        {[
-          { key: 'today', label: 'Hôm nay' },
-          { key: 'week', label: '7 ngày' },
-          { key: 'month', label: 'Tháng này' },
-        ].map(p => (
-          <Chip key={p.key} label={p.label} selected={period === p.key} onClick={() => setPeriod(p.key)} />
+      {/* Period Selectors */}
+      <div className="flex gap-2 p-1 bg-[var(--md-surface-container-highest)] rounded-2xl w-fit">
+        {['today', 'week', 'month'].map(p => (
+          <button 
+            key={p} 
+            onClick={() => setPeriod(p)}
+            className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all ${period === p ? 'bg-[var(--md-surface)] text-[var(--md-primary)] shadow-sm' : 'text-[var(--md-on-surface-variant)] opacity-70'}`}
+          >
+            {p === 'today' ? 'Hôm nay' : p === 'week' ? '7 ngày' : 'Tháng này'}
+          </button>
         ))}
       </div>
 
-      {/* Stats */}
+      {/* Stats Cards */}
       <div className="grid grid-cols-3 gap-3">
         {stats.map((s) => (
-          <Card key={s.label} variant="elevated" className="p-3 text-center">
-            <div className="w-9 h-9 rounded-full mx-auto mb-2 flex items-center justify-center"
-              style={{ background: `color-mix(in srgb, ${s.color} 15%, transparent)` }}
-            >
-              <s.icon size={18} style={{ color: s.color }} />
+          <Card key={s.label} variant="elevated" className="p-3 border-none flex flex-col items-center justify-center text-center">
+            <div className="w-10 h-10 rounded-2xl mb-2 flex items-center justify-center shadow-sm" style={{ backgroundColor: s.bg }}>
+              <s.icon size={20} style={{ color: s.color }} />
             </div>
-            <p className="text-base font-bold text-[var(--md-on-surface)] leading-tight">{s.value}</p>
-            <p className="text-[10px] text-[var(--md-on-surface-variant)] mt-1">{s.label}</p>
+            <p className="text-sm font-black text-[var(--md-on-surface)] leading-tight">{s.value}</p>
+            <p className="text-[9px] font-bold text-[var(--md-on-surface-variant)] uppercase mt-1 tracking-widest">{s.label}</p>
           </Card>
         ))}
       </div>
 
       {/* Revenue Chart */}
-      <Card variant="elevated" className="p-4">
-        <h3 className="text-sm font-semibold text-[var(--md-on-surface)] mb-3">Biểu đồ doanh thu</h3>
-        <div className="h-48">
+      <Card variant="elevated" className="p-4 border-none relative overflow-hidden">
+        <div className="flex items-center gap-2 mb-6">
+          <BarChart3 size={16} className="text-[var(--md-primary)]" />
+          <h3 className="text-xs font-bold text-[var(--md-on-surface-variant)] uppercase tracking-widest">Xu hướng doanh thu</h3>
+        </div>
+        <div className="h-44">
           {chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--md-primary)" stopOpacity={0.3} />
+                    <stop offset="5%" stopColor="var(--md-primary)" stopOpacity={0.2} />
                     <stop offset="95%" stopColor="var(--md-primary)" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--md-outline-variant)" opacity={0.5} />
-                <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--md-on-surface-variant)' }} />
-                <YAxis tick={{ fontSize: 10, fill: 'var(--md-on-surface-variant)' }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--md-outline-variant)" opacity={0.4} />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 'bold', fill: 'var(--md-on-surface-variant)' }} />
+                <YAxis hide />
                 <Tooltip
-                  contentStyle={{
-                    background: 'var(--md-surface-container)',
-                    border: '1px solid var(--md-outline-variant)',
-                    borderRadius: 'var(--md-radius-md)',
-                    fontSize: '12px',
-                  }}
-                  formatter={(v) => [formatCurrency(v), 'Doanh thu']}
+                  contentStyle={{ background: 'var(--md-surface-container-high)', border: 'none', borderRadius: '12px', fontSize: '10px', fontWeight: 'bold' }}
+                  itemStyle={{ color: 'var(--md-on-surface)' }}
+                  formatter={(v) => [formatCurrency(v), '']}
                 />
-                <Area type="monotone" dataKey="revenue" stroke="var(--md-primary)" fill="url(#revGrad)" strokeWidth={2} />
+                <Area type="monotone" dataKey="revenue" stroke="var(--md-primary)" fill="url(#revGrad)" strokeWidth={3} dot={{ r: 3, fill: 'var(--md-primary)' }} />
               </AreaChart>
             </ResponsiveContainer>
           ) : (
-            <div className="flex items-center justify-center h-full text-sm text-[var(--md-on-surface-variant)]">
-              Chưa có dữ liệu
-            </div>
+            <div className="flex items-center justify-center h-full text-xs font-bold opacity-30">KHÔNG CÓ DỮ LIỆU</div>
           )}
         </div>
       </Card>
 
-      {/* Top selling */}
-      <Card variant="elevated" className="p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Star size={16} className="text-[var(--md-tertiary)]" />
-          <h3 className="text-sm font-semibold text-[var(--md-on-surface)]">Món bán chạy</h3>
+      {/* Best Sellers */}
+      <Card variant="elevated" className="p-4 border-none">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Star size={16} className="text-[var(--md-tertiary)]" />
+            <h3 className="text-xs font-bold text-[var(--md-on-surface-variant)] uppercase tracking-widest">Món bán chạy</h3>
+          </div>
         </div>
         {topItems.length > 0 ? (
-          <div className="space-y-2.5">
+          <div className="space-y-3">
             {topItems.map((item, i) => (
-              <div key={item.name} className="flex items-center gap-3">
-                <span className={`
-                  w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold
-                  ${i === 0 ? 'bg-[var(--md-primary-container)] text-[var(--md-on-primary-container)]'
-                    : 'bg-[var(--md-surface-container-highest)] text-[var(--md-on-surface-variant)]'}
-                `}>
+              <div key={item.name} className="flex items-center gap-3 p-2 rounded-xl bg-[var(--md-surface-container-lowest)]">
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black
+                  ${i === 0 ? 'bg-[var(--md-primary)] text-[var(--md-on-primary)] shadow-sm'
+                  : i === 1 ? 'bg-[var(--md-secondary)] text-[var(--md-on-secondary)] shadow-sm'
+                  : i === 2 ? 'bg-[var(--md-tertiary)] text-[var(--md-on-tertiary)] shadow-sm'
+                  : 'bg-[var(--md-surface-container-high)] text-[var(--md-on-surface-variant)]'}`}>
                   {i + 1}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-[var(--md-on-surface)] truncate">{item.name}</p>
-                  <p className="text-xs text-[var(--md-on-surface-variant)]">{item.count} phần</p>
                 </div>
-                <span className="text-sm font-semibold text-[var(--md-primary)]">
-                  {formatCurrency(item.revenue)}
-                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-[var(--md-on-surface)] truncate">{item.name}</p>
+                  <p className="text-[10px] font-bold text-[var(--md-on-surface-variant)] opacity-70 uppercase">{item.count} phần đã bán</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-black text-[var(--md-primary)]">{formatCurrency(item.revenue)}</p>
+                </div>
               </div>
             ))}
           </div>
         ) : (
-          <p className="text-sm text-[var(--md-on-surface-variant)] text-center py-4">Chưa có dữ liệu</p>
+          <p className="text-xs font-bold text-center py-4 opacity-30">CHƯA CÓ DỮ LIỆU</p>
         )}
       </Card>
     </div>

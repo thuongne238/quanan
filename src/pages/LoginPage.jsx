@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogIn, Eye, EyeOff, Coffee } from 'lucide-react';
+import { LogIn, Eye, EyeOff, Coffee, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const LoginPage = () => {
@@ -13,7 +13,6 @@ const LoginPage = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  // Load saved credentials on mount
   useEffect(() => {
     const saved = localStorage.getItem('pos-saved-login');
     if (saved) {
@@ -22,7 +21,7 @@ const LoginPage = () => {
         setEmail(savedEmail || '');
         setPassword(savedPw || '');
         setRememberMe(true);
-      } catch {}
+      } catch { }
     }
   }, []);
 
@@ -31,7 +30,6 @@ const LoginPage = () => {
     setError('');
     setLoading(true);
     try {
-      // Save or clear credentials
       if (rememberMe) {
         localStorage.setItem('pos-saved-login', JSON.stringify({ email, password }));
       } else {
@@ -39,6 +37,7 @@ const LoginPage = () => {
       }
 
       const user = await login(email, password);
+      // Chuyển hướng dựa trên vai trò
       navigate(user.role === 'admin' ? '/dashboard' : '/menu', { replace: true });
     } catch (err) {
       setError(err.code === 'auth/invalid-credential'
@@ -50,131 +49,105 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-[var(--md-surface)]">
-      {/* Background decoration */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-32 -right-32 w-64 h-64 rounded-full bg-[var(--md-primary-container)] opacity-30 blur-3xl" />
-        <div className="absolute -bottom-32 -left-32 w-64 h-64 rounded-full bg-[var(--md-tertiary-container)] opacity-30 blur-3xl" />
-      </div>
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-[var(--md-surface)] relative overflow-hidden">
+      {/* Hiệu ứng nền Blur nghệ thuật */}
+      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[30%] bg-[var(--md-primary-container)] blur-[100px] opacity-40 rounded-full" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[30%] bg-[var(--md-secondary-container)] blur-[100px] opacity-40 rounded-full" />
 
-      <div className="relative w-full max-w-sm animate-scale-in">
-        {/* Logo */}
-        <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 rounded-[var(--md-radius-xl)] bg-[var(--md-primary-container)] flex items-center justify-center mb-4 elevation-1">
-            <Coffee size={28} className="text-[var(--md-on-primary-container)]" />
+      <div className="w-full max-w-sm z-10 animate-fade-in">
+        {/* Header Brand */}
+        <div className="text-center mb-10">
+          <div className="inline-flex p-4 rounded-[2rem] bg-[var(--md-primary)] text-white shadow-2xl shadow-[var(--md-primary)]/30 mb-6">
+            <Coffee size={40} strokeWidth={2.5} />
           </div>
-          <h1 className="text-2xl font-bold text-[var(--md-on-surface)]">Pos công thương</h1>
-          <p className="text-sm text-[var(--md-on-surface-variant)] mt-1">Đăng nhập để tiếp tục</p>
+          <h1 className="text-3xl font-black text-[var(--md-on-surface)] tracking-tight">Pos công thương</h1>
+          <p className="text-xs font-bold text-[var(--md-primary)] uppercase tracking-[0.2em] mt-2 opacity-70">Hệ thống quản lý bán hàng</p>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="glass rounded-[var(--md-radius-xl)] p-6 space-y-5 elevation-1">
+        {/* Login Card */}
+        <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="px-4 py-3 rounded-[var(--md-radius-md)] bg-[var(--md-error)]/10 text-[var(--md-error)] text-sm animate-slide-down">
-              {error}
+            <div className="p-4 rounded-2xl bg-red-50 border border-red-100 text-red-600 text-xs font-bold flex items-center gap-2 animate-shake">
+              <ShieldCheck size={16} /> {error}
             </div>
           )}
 
-          {/* Email */}
-          <div>
-            <label className="block text-xs font-medium text-[var(--md-on-surface-variant)] mb-1.5 ml-1">
-              Email
-            </label>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-[var(--md-on-surface-variant)] uppercase ml-2 tracking-widest">Tài khoản Email</label>
             <input
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
               required
-              className="
-                w-full h-12 px-4 rounded-[var(--md-radius-md)]
-                bg-[var(--md-surface-container-highest)]
-                text-[var(--md-on-surface)] text-sm
-                border border-transparent
-                focus:border-[var(--md-primary)] focus:outline-none
-                transition-colors placeholder:text-[var(--md-on-surface-variant)]/50
-              "
-              placeholder="your@email.com"
+              placeholder="name@example.com"
+              className="w-full h-14 px-5 rounded-2xl bg-[var(--md-surface-container-high)] border-2 border-transparent focus:border-[var(--md-primary)] focus:bg-[var(--md-surface)] outline-none transition-all font-medium text-sm"
             />
           </div>
 
-          {/* Password */}
-          <div>
-            <label className="block text-xs font-medium text-[var(--md-on-surface-variant)] mb-1.5 ml-1">
-              Mật khẩu
-            </label>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-[var(--md-on-surface-variant)] uppercase ml-2 tracking-widest">Mật khẩu</label>
             <div className="relative">
               <input
                 type={showPw ? 'text' : 'password'}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 required
-                className="
-                  w-full h-12 px-4 pr-12 rounded-[var(--md-radius-md)]
-                  bg-[var(--md-surface-container-highest)]
-                  text-[var(--md-on-surface)] text-sm
-                  border border-transparent
-                  focus:border-[var(--md-primary)] focus:outline-none
-                  transition-colors placeholder:text-[var(--md-on-surface-variant)]/50
-                "
                 placeholder="••••••••"
+                className="w-full h-14 px-5 pr-14 rounded-2xl bg-[var(--md-surface-container-high)] border-2 border-transparent focus:border-[var(--md-primary)] focus:bg-[var(--md-surface)] outline-none transition-all font-medium text-sm"
               />
               <button
                 type="button"
                 onClick={() => setShowPw(!showPw)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-[var(--md-on-surface-variant)]"
+                className="absolute right-4 top-1/2 -translate-y-1/2 p-2 text-[var(--md-on-surface-variant)] active:scale-90 transition-transform"
               >
-                {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
+                {showPw ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
             </div>
           </div>
 
-          {/* Remember me */}
-          <label className="flex items-center gap-3 cursor-pointer py-1 select-none">
-            <button
-              type="button"
-              onClick={() => setRememberMe(!rememberMe)}
-              className={`
-                w-5 h-5 rounded-[4px] border-2 flex items-center justify-center
-                transition-all duration-200
-                ${rememberMe
-                  ? 'bg-[var(--md-primary)] border-[var(--md-primary)]'
-                  : 'bg-transparent border-[var(--md-outline)]'
-                }
-              `}
-            >
-              {rememberMe && (
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <path d="M2 6L5 9L10 3" stroke="var(--md-on-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              )}
-            </button>
-            <span className="text-sm text-[var(--md-on-surface-variant)]">Lưu đăng nhập</span>
-          </label>
+          {/* Remember & Forgot */}
+          <div className="flex items-center justify-between px-2 pt-1">
+            <label className="flex items-center gap-2 cursor-pointer group">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={() => setRememberMe(!rememberMe)}
+                className="hidden"
+              />
+              <div className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-all ${rememberMe ? 'bg-[var(--md-primary)] border-[var(--md-primary)]' : 'border-[var(--md-outline)]'}`}>
+                {rememberMe && <div className="w-2 h-2 bg-white rounded-full" />}
+              </div>
+              <span className="text-xs font-bold text-[var(--md-on-surface-variant)]">Ghi nhớ tôi</span>
+            </label>
+          </div>
 
-          {/* Submit */}
+          {/* Submit Button */}
           <button
             type="submit"
             disabled={loading}
-            className="
-              w-full h-12 rounded-[var(--md-radius-xl)]
-              bg-[var(--md-primary)] text-[var(--md-on-primary)]
-              font-semibold text-sm
-              transition-all duration-200 active:scale-[0.98]
-              disabled:opacity-60 disabled:cursor-not-allowed
-              elevation-1 hover:elevation-2
-              flex items-center justify-center gap-2
-            "
+            className="w-full h-14 mt-4 bg-[var(--md-primary)] text-white rounded-2xl font-black text-sm shadow-xl shadow-[var(--md-primary)]/20 flex items-center justify-center gap-3 active:scale-[0.97] transition-all disabled:opacity-50"
           >
             {loading ? (
-              <div className="w-5 h-5 border-2 border-[var(--md-on-primary)] border-t-transparent rounded-full animate-spin" />
+              <div className="w-6 h-6 border-3 border-white/30 border-t-white rounded-full animate-spin" />
             ) : (
               <>
-                <LogIn size={18} />
-                Đăng nhập
+                <LogIn size={20} />
+                ĐĂNG NHẬP NGAY
               </>
             )}
           </button>
         </form>
+
+        <p className="text-center mt-10 text-[10px] font-bold text-[var(--md-on-surface-variant)] uppercase tracking-[0.2em] opacity-40">
+          <div>
+            © 2026 POS Công Thương
+
+          </div>
+          <div>
+            Version 1.2
+          </div>
+        </p>
+
       </div>
     </div>
   );

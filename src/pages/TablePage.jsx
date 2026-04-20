@@ -36,6 +36,7 @@ const TablePage = () => {
   const [activeTable, setActiveTable] = useState(null); // the table being ordered/viewed
   const [menuOpen, setMenuOpen] = useState(false);      // open menu panel
   const [paymentModalOpen, setPaymentModalOpen] = useState(false); // open payment modal
+  const [messageBox, setMessageBox] = useState(null);   // message box instead of alert
 
   // Menu data
   const [categories, setCategories] = useState([]);
@@ -175,9 +176,23 @@ const TablePage = () => {
 
   // ===== Checkout (create order + mark table occupied) =====
   const handleCheckout = async () => {
-    if (orderItems.length === 0 || !activeTable) return;
+    if (!activeTable) return;
     setSubmitting(true);
     try {
+      if (orderItems.length === 0) {
+        if (activeTable.status === 'occupied') {
+          if (activeTable.current_order?.id) {
+            await update('orders', activeTable.current_order.id, { status: 'cancelled' });
+          }
+          await update('tables', activeTable.id, { status: 'empty', current_order: null });
+        }
+        const freshTables = await fetchTables();
+        setTables(freshTables);
+        setMenuOpen(false);
+        setActiveTable(null);
+        return;
+      }
+
       const orderData = {
         items: orderItems.map(i => ({ id: i.id, name: i.name, price: i.price, qty: i.qty })),
         total_amount: orderTotal,
@@ -484,7 +499,7 @@ const TablePage = () => {
           )}
 
           {/* Checkout button */}
-          {orderItems.length > 0 && (
+          {(orderItems.length > 0 || activeTable?.status === 'occupied') && (
             <div className="border-t border-[var(--md-outline-variant)] pt-3 mt-4">
               <div className="flex justify-between items-center mb-3">
                 <span className="text-base font-medium text-[var(--md-on-surface-variant)]">Tổng cộng</span>
@@ -492,13 +507,24 @@ const TablePage = () => {
               </div>
               <div className="flex gap-2">
                 <button onClick={handleCheckout} disabled={submitting}
-                  className="flex-1 h-12 rounded-[var(--md-radius-xl)] bg-[var(--md-secondary-container)] text-[var(--md-on-secondary-container)] font-semibold text-sm transition-all duration-200 active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-2">
+                  className="flex-1 h-12 rounded-[var(--md-radius-xl)] bg-[var(--md-secondary-container)] text-[var(--md-on-secondary-container)] font-semibold text-sm transition-all duration-200 active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-2"
+                  title="Lưu giỏ hàng hoặc làm trống bàn nếu đã xóa hết món"
+                >
                   {submitting
                     ? <div className="w-5 h-5 border-2 border-[var(--md-on-secondary-container-content)] border-t-transparent rounded-full animate-spin" />
                     : <>Tạm lưu chờ thanh toán</>
                   }
                 </button>
-                <button onClick={() => setPaymentModalOpen(true)} disabled={submitting}
+                <button onClick={() => {
+                  if (orderItems.length === 0) {
+                    setMessageBox({
+                      title: 'Giỏ hàng trống',
+                      message: 'Vui lòng chọn ít nhất 1 món, hoặc bấm "Tạm lưu chờ thanh toán" để dọn bàn trống.'
+                    });
+                    return;
+                  }
+                  setPaymentModalOpen(true);
+                }} disabled={submitting}
                   className="flex-[2] h-12 rounded-[var(--md-radius-xl)] bg-[var(--md-primary)] text-[var(--md-on-primary)] font-semibold text-sm transition-all duration-200 active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-2">
                   Thanh toán ngay
                 </button>
@@ -547,6 +573,19 @@ const TablePage = () => {
               </div>
             </button>
           </div>
+        </div>
+      </Modal>
+
+      {/* ===== Message Box ===== */}
+      <Modal open={!!messageBox} onClose={() => setMessageBox(null)} title={messageBox?.title || 'Thông báo'} size="sm">
+        <div className="space-y-4 pt-2">
+          <p className="text-sm text-[var(--md-on-surface-variant)] text-center leading-relaxed">
+            {messageBox?.message}
+          </p>
+          <button onClick={() => setMessageBox(null)}
+            className="w-full h-11 mt-2 rounded-[var(--md-radius-xl)] bg-[var(--md-primary)] text-[var(--md-on-primary)] font-semibold text-sm transition-all duration-200 active:scale-[0.98]">
+            Đã hiểu
+          </button>
         </div>
       </Modal>
 
